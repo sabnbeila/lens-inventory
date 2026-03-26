@@ -831,6 +831,21 @@ input.compact{margin-bottom:0;padding:10px;font-size:13px}
           <button class="btn btn-gold" style="background:var(--red);margin-bottom:8px" onclick="confirmOutItem()">✓ ADD TO OUTBOX</button>
           <button class="btn btn-ghost" onclick="discardOutItem()">✗ DISCARD</button>
         </div>
+        <!-- EYE SELECT POPUP — shown for presbyopia lenses -->
+        <div id="eyeSelectZone" class="save-zone" style="display:none">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+            <div style="font-size:10px;color:var(--amber);letter-spacing:1.5px">👁 SELECT EYE</div>
+            <button onclick="dismissEyeSelect()" style="background:none;border:none;color:var(--text2);font-size:18px;cursor:pointer;line-height:1;padding:0 2px" title="Dismiss">✕</button>
+          </div>
+          <div id="eyeSelectLensData" style="margin:8px 0;font-family:var(--mono);font-size:11px;color:var(--text2)"></div>
+          <div style="font-family:var(--display);font-size:13px;color:var(--text2);margin-bottom:10px;letter-spacing:1px">Which eye is this lens for?</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px">
+            <button class="btn" style="background:rgba(0,255,140,0.12);color:var(--green);border:1px solid rgba(0,255,140,0.35);font-family:var(--display);font-size:18px;letter-spacing:2px;padding:14px 0" onclick="confirmEyeSelect('RE')">R.E</button>
+            <button class="btn" style="background:rgba(0,240,255,0.12);color:var(--cyan);border:1px solid rgba(0,240,255,0.35);font-family:var(--display);font-size:18px;letter-spacing:2px;padding:14px 0" onclick="confirmEyeSelect('LE')">L.E</button>
+            <button class="btn" style="background:rgba(168,85,247,0.12);color:var(--purple);border:1px solid rgba(168,85,247,0.35);font-family:var(--display);font-size:18px;letter-spacing:2px;padding:14px 0" onclick="confirmEyeSelect('BOTH')">BOTH</button>
+          </div>
+        </div>
+
         <div id="scanPrompt" style="text-align:center;padding:30px;color:var(--text2)">
           <div style="font-size:32px;opacity:.2">🔍</div>
           <p style="font-size:11px">Ready. Beeps/Vibrates on success.</p>
@@ -2869,7 +2884,7 @@ function bootApp(){
 // STATE
 // ══════════════════════════════════════════════
 let inv=new Map(), logs=[];
-let scanMode='IN', scanner=null, activeLens=null, bulkOut=[], scanCooldown=false;
+let scanMode='IN', scanner=null, activeLens=null, bulkOut=[], scanCooldown=false, pendingScanResult=null;
 let activeType='Single', activeCoating='cr39_clear', activeGridEye='BOTH';
 const S_KEY='spec_lens_presb_v1';
 let audioCtx=null;
@@ -3803,6 +3818,17 @@ function onDetected(txt){
   }
 
   activeLens = result.key;
+  const isP = result.parsed && isPresb(result.parsed.type);
+
+  // ── Presbyopia: always ask which eye before proceeding ──
+  if(isP){
+    pendingScanResult = result;
+    const labelHTML = `<span style="color:var(--cyan)">${result.parsed.type}</span> · <span style="color:var(--accent2)">${result.parsed.coat}</span><br>SPH <b>${result.parsed.sph}</b>${result.parsed.add?' ADD <b>'+result.parsed.add+'</b>':''}`;
+    document.getElementById('eyeSelectLensData').innerHTML = labelHTML;
+    document.getElementById('eyeSelectZone').style.display = 'block';
+    document.getElementById('scanPrompt').style.display = 'none';
+    return;
+  }
 
   if(scanMode==='IN'){
     // Show parsed breakdown before confirming
@@ -3879,7 +3905,11 @@ window.clearBulkList=()=>{
 };
 window.saveStockIn=()=>{
   const qty=parseInt(document.getElementById('qtyInputIn').value)||1;
-  updateInventory(activeLens,qty,'IN','Scan In');
+  if(Array.isArray(activeLens)){
+    activeLens.forEach(k=>updateInventory(k,qty,'IN','Scan In'));
+  } else {
+    updateInventory(activeLens,qty,'IN','Scan In');
+  }
   renderStats();
   document.getElementById('saveZoneIn').style.display='none';
   document.getElementById('scanPrompt').style.display='block';
@@ -3900,6 +3930,60 @@ window.saveStockOutBulk=()=>{
   renderStats();
   save();
 };
+window.dismissEyeSelect=()=>{
+  pendingScanResult=null;
+  document.getElementById('eyeSelectZone').style.display='none';
+  if(bulkOut.length) document.getElementById('saveZoneOut').style.display='block';
+  else document.getElementById('scanPrompt').style.display='block';
+};
+
+window.confirmEyeSelect=(eye)=>{
+  if(!pendingScanResult) return;
+  const result = pendingScanResult;
+  pendingScanResult = null;
+  document.getElementById('eyeSelectZone').style.display='none';
+
+  // Build key(s) with chosen eye
+  function buildKeyForEye(e){
+    const p = result.parsed;
+    const sphRaw = parseFloat(p.sph);
+    const addRaw = parseFloat(p.add);
+    return makePresbKey(p.type, result.key.split('|')[1], e, sphRaw, addRaw);
+  }
+
+  const eyes = eye==='BOTH' ? ['RE','LE'] : [eye];
+
+  if(scanMode==='IN'){
+    // For BOTH: show saveZoneIn but we'll save both keys on confirm
+    // Store both keys in activeLens (array or joined)
+    activeLens = eyes.length===2 ? eyes.map(buildKeyForEye) : buildKeyForEye(eyes[0]);
+    // Rebuild label with selected eye
+    const eyeLabel = eye==='BOTH' ? 'RE + LE' : eye;
+    const labelHTML = `<div style="font-family:var(--mono);font-size:11px;color:var(--text2);line-height:1.7;margin-bottom:6px">
+      <span style="color:var(--cyan)">${result.parsed.type}</span> ·
+      <span style="color:var(--accent2)">${result.parsed.coat}</span><br>
+      SPH <b>${result.parsed.sph}</b>${result.parsed.add?' ADD <b>'+result.parsed.add+'</b>':''}
+      · <span style="color:var(--green)">${eyeLabel}</span>
+    </div>`;
+    document.getElementById('lensDataIn').innerHTML = labelHTML;
+    document.getElementById('saveZoneIn').style.display='block';
+    document.getElementById('scanPrompt').style.display='none';
+
+  } else {
+    // OUT / RETURN — add to bulk outbox
+    eyes.forEach(e=>{
+      const k = buildKeyForEye(e);
+      const pr = {...result.parsed, eye:e};
+      const label = parsedLabel(pr, k);
+      bulkOut.push(k);
+      bulkOutLabels.push(label);
+    });
+    updateBulkUI();
+    document.getElementById('saveZoneOut').style.display='block';
+    document.getElementById('scanPrompt').style.display='none';
+  }
+};
+
 window.stopScanner=()=>{if(scanner){scanner.stop().then(()=>scanner=null);}};
 
 // ══════════════════════════════════════════════
