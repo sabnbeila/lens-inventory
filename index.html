@@ -831,21 +831,6 @@ input.compact{margin-bottom:0;padding:10px;font-size:13px}
           <button class="btn btn-gold" style="background:var(--red);margin-bottom:8px" onclick="confirmOutItem()">✓ ADD TO OUTBOX</button>
           <button class="btn btn-ghost" onclick="discardOutItem()">✗ DISCARD</button>
         </div>
-        <!-- EYE SELECT POPUP — shown for presbyopia lenses -->
-        <div id="eyeSelectZone" class="save-zone" style="display:none">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-            <div style="font-size:10px;color:var(--amber);letter-spacing:1.5px">👁 SELECT EYE</div>
-            <button onclick="dismissEyeSelect()" style="background:none;border:none;color:var(--text2);font-size:18px;cursor:pointer;line-height:1;padding:0 2px" title="Dismiss">✕</button>
-          </div>
-          <div id="eyeSelectLensData" style="margin:8px 0;font-family:var(--mono);font-size:11px;color:var(--text2)"></div>
-          <div style="font-family:var(--display);font-size:13px;color:var(--text2);margin-bottom:10px;letter-spacing:1px">Which eye is this lens for?</div>
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px">
-            <button class="btn" style="background:rgba(0,255,140,0.12);color:var(--green);border:1px solid rgba(0,255,140,0.35);font-family:var(--display);font-size:18px;letter-spacing:2px;padding:14px 0" onclick="confirmEyeSelect('RE')">R.E</button>
-            <button class="btn" style="background:rgba(0,240,255,0.12);color:var(--cyan);border:1px solid rgba(0,240,255,0.35);font-family:var(--display);font-size:18px;letter-spacing:2px;padding:14px 0" onclick="confirmEyeSelect('LE')">L.E</button>
-            <button class="btn" style="background:rgba(168,85,247,0.12);color:var(--purple);border:1px solid rgba(168,85,247,0.35);font-family:var(--display);font-size:18px;letter-spacing:2px;padding:14px 0" onclick="confirmEyeSelect('BOTH')">BOTH</button>
-          </div>
-        </div>
-
         <div id="scanPrompt" style="text-align:center;padding:30px;color:var(--text2)">
           <div style="font-size:32px;opacity:.2">🔍</div>
           <p style="font-size:11px">Ready. Beeps/Vibrates on success.</p>
@@ -1243,18 +1228,49 @@ const isPresb     = t  => PRESB_TYPES.includes(t);
 const BRANCHES = [];
 const PW_KEY = 'spec_branch_pw_v1';
 const SESSION_KEY = 'spec_session_v1';
-const USERS_KEY = 'spec_users_v1';
-
 let currentUser = null;  // { id, name, branchId } — null for admin
 
-function getUsers(){
-  const saved = localStorage.getItem(USERS_KEY);
-  return saved ? JSON.parse(saved) : [];
-}
-function saveUsers(users){ localStorage.setItem(USERS_KEY, JSON.stringify(users)); }
+// ── Firebase-backed user store ──
+// In-memory cache — populated by a Firebase listener on boot
+let _usersCache = [];
+let _usersListenerAttached = false;
+
+function getUsers(){ return _usersCache; }
 
 function getUsersForBranch(branchId){
-  return getUsers().filter(u => u.branchId === branchId && u.active !== false);
+  return _usersCache.filter(u => u.branchId === branchId && u.active !== false);
+}
+
+// Write the full users array to Firebase /users node
+async function saveUsers(users){
+  _usersCache = users;
+  if(!fbReady) await initFirebase();
+  if(!fbReady){ console.warn('saveUsers: Firebase not ready'); return; }
+  // Convert array → object keyed by user id for Firebase
+  const obj = {};
+  users.forEach(u => { obj[u.id] = u; });
+  await fbDb.ref('users').set(obj);
+}
+
+// Attach a real-time listener so all devices stay in sync
+function attachUsersListener(){
+  if(_usersListenerAttached || !fbReady) return;
+  _usersListenerAttached = true;
+  fbDb.ref('users').on('value', snap => {
+    const val = snap.val();
+    _usersCache = val ? Object.values(val) : [];
+    // Refresh user list if admin panel is open
+    const ul = document.getElementById('adm-userList');
+    if(ul && document.getElementById('adminPanel') &&
+       document.getElementById('adminPanel').style.display !== 'none'){
+      renderAdmUsers();
+    }
+    // Refresh login user dropdown if visible
+    if(document.getElementById('loginUserField') &&
+       document.getElementById('loginUserField').style.display !== 'none'){
+      populateLoginUsers();
+    }
+  });
 }
 
 // Current user display name for log stamping
@@ -1290,23 +1306,14 @@ function branchStorageKey(branchId){ return `spec_lens_${branchId}_v1`; }
 function activeBranchId(){ return adminViewingBranch || currentBranch; }
 function branchInfo(id){ return BRANCHES.find(b=>b.id===id)||{id,label:id,icon:'📍',color:'var(--text)'}; }
 
-// ── LOGIN BRANCH CHANGE ──
-window.onLoginBranchChange = () => {
+// ── Populate login user dropdown ──
+function populateLoginUsers(){
   const branch = document.getElementById('loginBranch').value;
   const userField = document.getElementById('loginUserField');
   const userSel = document.getElementById('loginUser');
-
-  if(!branch || branch === 'admin'){
-    userField.style.display = 'none';
-    return;
-  }
-
+  if(!branch || branch === 'admin'){ userField.style.display='none'; return; }
   const users = getUsersForBranch(branch);
-  if(users.length === 0){
-    userField.style.display = 'none';
-    return;
-  }
-
+  if(users.length === 0){ userField.style.display='none'; return; }
   userSel.innerHTML = '<option value="">— Choose user —</option>';
   users.forEach(u => {
     const opt = document.createElement('option');
@@ -1315,6 +1322,18 @@ window.onLoginBranchChange = () => {
     userSel.appendChild(opt);
   });
   userField.style.display = 'block';
+}
+
+// ── LOGIN BRANCH CHANGE ──
+window.onLoginBranchChange = async () => {
+  const branch = document.getElementById('loginBranch').value;
+  const userField = document.getElementById('loginUserField');
+  if(!branch || branch === 'admin'){ userField.style.display='none'; return; }
+  if(!fbReady){ await initFirebase(); }
+  if(_usersCache.length === 0){
+    await new Promise(r => setTimeout(r, 800));
+  }
+  populateLoginUsers();
 };
 
 // ── LOGIN ──
@@ -1361,10 +1380,14 @@ window.doLogin = () => {
       document.getElementById('loginPw').focus();
       return;
     }
-    // Update last active
-    const allUsers = getUsers();
+    // Update last active in Firebase directly
+    if(fbReady){
+      fbDb.ref(`users/${userId}`).update({ lastActive: new Date().toISOString() });
+    }
+    // Also update local cache
+    const allUsers = _usersCache;
     const idx = allUsers.findIndex(u => u.id === userId);
-    if(idx>=0){ allUsers[idx].lastActive = new Date().toISOString(); saveUsers(allUsers); }
+    if(idx>=0) allUsers[idx].lastActive = new Date().toISOString();
 
     currentBranch = branch;
     currentUser = { id: user.id, name: user.name, branchId: branch };
@@ -2795,7 +2818,7 @@ function _lvAgo(isoOrDateStr){
 }
 // ── END LIVE VIEW ──────────────────────────────────────────────────────────
 
-window.addUser = () => {
+window.addUser = async () => {
   const nameEl  = document.getElementById('newUserName');
   const brEl    = document.getElementById('newUserBranch');
   const pwEl    = document.getElementById('newUserPw');
@@ -2806,17 +2829,18 @@ window.addUser = () => {
   if(!name)    { msgEl.textContent='⚠ Enter a name'; msgEl.style.color='var(--red)'; msgEl.style.display='block'; return; }
   if(!branchId){ msgEl.textContent='⚠ Select a branch'; msgEl.style.color='var(--red)'; msgEl.style.display='block'; return; }
   if(!pw)      { msgEl.textContent='⚠ Set a password'; msgEl.style.color='var(--red)'; msgEl.style.display='block'; return; }
+  msgEl.textContent='Saving…'; msgEl.style.color='var(--text2)'; msgEl.style.display='block';
   const users = getUsers();
   const id = 'u_'+Date.now().toString(36);
   users.push({ id, name, branchId, password: pw, active: true });
-  saveUsers(users);
+  await saveUsers(users);
   nameEl.value=''; pwEl.value='';
-  msgEl.textContent=`✓ "${name}" added to branch`; msgEl.style.color='var(--green)'; msgEl.style.display='block';
+  msgEl.textContent=`✓ "${name}" added — synced to cloud`; msgEl.style.color='var(--green)'; msgEl.style.display='block';
   setTimeout(()=>msgEl.style.display='none', 3000);
   renderAdmUsers();
 };
 
-window.resetUserPw = (id) => {
+window.resetUserPw = async (id) => {
   const pwEl = document.getElementById('upw_'+id);
   if(!pwEl) return;
   const pw = pwEl.value.trim();
@@ -2825,31 +2849,34 @@ window.resetUserPw = (id) => {
   const u = users.find(u=>u.id===id);
   if(!u) return;
   u.password = pw;
-  saveUsers(users);
+  await saveUsers(users);
   pwEl.value='';
-  show('✓ Password updated','var(--green)');
+  show('✓ Password updated — synced to cloud','var(--green)');
 };
 
-window.toggleUserActive = (id) => {
+window.toggleUserActive = async (id) => {
   const users = getUsers();
   const u = users.find(u=>u.id===id);
   if(!u) return;
   u.active = u.active === false ? true : false;
-  saveUsers(users);
+  await saveUsers(users);
   renderAdmUsers();
 };
 
-window.deleteUser = (id) => {
+window.deleteUser = async (id) => {
   const users = getUsers();
   const u = users.find(u=>u.id===id);
   if(!u) return;
   if(!confirm(`Delete user "${u.name}"? Their history will be preserved.`)) return;
-  saveUsers(users.filter(u=>u.id!==id));
+  await saveUsers(users.filter(u=>u.id!==id));
   renderAdmUsers();
 };
 
 // ── BOOT: check for existing session ──
 function bootApp(){
+  // ── Init Firebase early so users sync before login ──
+  initFirebase();
+
   // ── Clock (RAF-based — works in sandboxes that block setInterval) ──
   let _lastClkSec = -1;
   (function rafClock(){
@@ -2884,7 +2911,7 @@ function bootApp(){
 // STATE
 // ══════════════════════════════════════════════
 let inv=new Map(), logs=[];
-let scanMode='IN', scanner=null, activeLens=null, bulkOut=[], scanCooldown=false, pendingScanResult=null;
+let scanMode='IN', scanner=null, activeLens=null, bulkOut=[], scanCooldown=false;
 let activeType='Single', activeCoating='cr39_clear', activeGridEye='BOTH';
 const S_KEY='spec_lens_presb_v1';
 let audioCtx=null;
@@ -3818,17 +3845,6 @@ function onDetected(txt){
   }
 
   activeLens = result.key;
-  const isP = result.parsed && isPresb(result.parsed.type);
-
-  // ── Presbyopia: always ask which eye before proceeding ──
-  if(isP){
-    pendingScanResult = result;
-    const labelHTML = `<span style="color:var(--cyan)">${result.parsed.type}</span> · <span style="color:var(--accent2)">${result.parsed.coat}</span><br>SPH <b>${result.parsed.sph}</b>${result.parsed.add?' ADD <b>'+result.parsed.add+'</b>':''}`;
-    document.getElementById('eyeSelectLensData').innerHTML = labelHTML;
-    document.getElementById('eyeSelectZone').style.display = 'block';
-    document.getElementById('scanPrompt').style.display = 'none';
-    return;
-  }
 
   if(scanMode==='IN'){
     // Show parsed breakdown before confirming
@@ -3905,11 +3921,7 @@ window.clearBulkList=()=>{
 };
 window.saveStockIn=()=>{
   const qty=parseInt(document.getElementById('qtyInputIn').value)||1;
-  if(Array.isArray(activeLens)){
-    activeLens.forEach(k=>updateInventory(k,qty,'IN','Scan In'));
-  } else {
-    updateInventory(activeLens,qty,'IN','Scan In');
-  }
+  updateInventory(activeLens,qty,'IN','Scan In');
   renderStats();
   document.getElementById('saveZoneIn').style.display='none';
   document.getElementById('scanPrompt').style.display='block';
@@ -3930,60 +3942,6 @@ window.saveStockOutBulk=()=>{
   renderStats();
   save();
 };
-window.dismissEyeSelect=()=>{
-  pendingScanResult=null;
-  document.getElementById('eyeSelectZone').style.display='none';
-  if(bulkOut.length) document.getElementById('saveZoneOut').style.display='block';
-  else document.getElementById('scanPrompt').style.display='block';
-};
-
-window.confirmEyeSelect=(eye)=>{
-  if(!pendingScanResult) return;
-  const result = pendingScanResult;
-  pendingScanResult = null;
-  document.getElementById('eyeSelectZone').style.display='none';
-
-  // Build key(s) with chosen eye
-  function buildKeyForEye(e){
-    const p = result.parsed;
-    const sphRaw = parseFloat(p.sph);
-    const addRaw = parseFloat(p.add);
-    return makePresbKey(p.type, result.key.split('|')[1], e, sphRaw, addRaw);
-  }
-
-  const eyes = eye==='BOTH' ? ['RE','LE'] : [eye];
-
-  if(scanMode==='IN'){
-    // For BOTH: show saveZoneIn but we'll save both keys on confirm
-    // Store both keys in activeLens (array or joined)
-    activeLens = eyes.length===2 ? eyes.map(buildKeyForEye) : buildKeyForEye(eyes[0]);
-    // Rebuild label with selected eye
-    const eyeLabel = eye==='BOTH' ? 'RE + LE' : eye;
-    const labelHTML = `<div style="font-family:var(--mono);font-size:11px;color:var(--text2);line-height:1.7;margin-bottom:6px">
-      <span style="color:var(--cyan)">${result.parsed.type}</span> ·
-      <span style="color:var(--accent2)">${result.parsed.coat}</span><br>
-      SPH <b>${result.parsed.sph}</b>${result.parsed.add?' ADD <b>'+result.parsed.add+'</b>':''}
-      · <span style="color:var(--green)">${eyeLabel}</span>
-    </div>`;
-    document.getElementById('lensDataIn').innerHTML = labelHTML;
-    document.getElementById('saveZoneIn').style.display='block';
-    document.getElementById('scanPrompt').style.display='none';
-
-  } else {
-    // OUT / RETURN — add to bulk outbox
-    eyes.forEach(e=>{
-      const k = buildKeyForEye(e);
-      const pr = {...result.parsed, eye:e};
-      const label = parsedLabel(pr, k);
-      bulkOut.push(k);
-      bulkOutLabels.push(label);
-    });
-    updateBulkUI();
-    document.getElementById('saveZoneOut').style.display='block';
-    document.getElementById('scanPrompt').style.display='none';
-  }
-};
-
 window.stopScanner=()=>{if(scanner){scanner.stop().then(()=>scanner=null);}};
 
 // ══════════════════════════════════════════════
@@ -4268,6 +4226,7 @@ async function initFirebase(){
     else { fbApp = firebase.apps[0]; }
     fbDb = firebase.database();
     fbReady = true;
+    attachUsersListener(); // ← sync users across all devices
     updateSyncBtnIdle();
     return true;
   } catch(e){
