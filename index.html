@@ -520,6 +520,9 @@ input.compact{margin-bottom:0;padding:10px;font-size:13px}
         <button class="sync-btn" id="syncBtn" onclick="triggerSync()" title="Sync to cloud">
           <span class="sync-dot"></span><span id="syncBtnLabel">SYNC</span>
         </button>
+        <div id="storageMon" title="Storage usage" style="display:flex;align-items:center;gap:3px;padding:4px 7px;border-radius:8px;border:1px solid var(--border);background:var(--glass);cursor:default;flex-shrink:0">
+          <span style="font-size:9px">💾</span><span style="font-family:var(--mono);font-size:8px;color:var(--text2)">—</span>
+        </div>
         <button class="theme-toggle" id="themeToggleBtn" onclick="toggleTheme()" title="Toggle light/dark mode">🌙</button>
         <button class="btn btn-ghost btn-sm" onclick="doLogout()" style="font-size:9px;padding:5px 10px;white-space:nowrap">OUT</button>
       </div>
@@ -2947,12 +2950,65 @@ function vibrate(ok){if("vibrate"in navigator)navigator.vibrate(ok?80:[50,50,50]
 // ══════════════════════════════════════════════
 // PERSIST
 // ══════════════════════════════════════════════
+const LOG_LIMIT = 500; // max log entries kept in localStorage per branch
+
 function save(){
   const bid = activeBranchId();
-  if(!bid) return; // admin with no branch selected — don't save
-  localStorage.setItem(branchStorageKey(bid), JSON.stringify({i:[...inv],l:logs}));
+  if(!bid) return;
+  // ── Trim logs: keep newest LOG_LIMIT, archive the rest ──
+  let trimmed = logs;
+  if(logs.length > LOG_LIMIT){
+    trimmed = logs.slice(0, LOG_LIMIT);
+    // Save overflow to an archive key (capped at 2000 total archived)
+    const archKey = branchStorageKey(bid) + '_arch';
+    try {
+      const arch = JSON.parse(localStorage.getItem(archKey)||'[]');
+      const overflow = logs.slice(LOG_LIMIT);
+      const merged = [...overflow, ...arch].slice(0, 2000);
+      localStorage.setItem(archKey, JSON.stringify(merged));
+    } catch(e){ /* archive full — silently drop oldest */ }
+    logs = trimmed; // update in-memory logs too
+  }
+  try {
+    localStorage.setItem(branchStorageKey(bid), JSON.stringify({i:[...inv],l:trimmed}));
+  } catch(e){
+    // Storage quota hit — emergency: drop archive and retry with trimmed only
+    try {
+      localStorage.removeItem(branchStorageKey(bid)+'_arch');
+      localStorage.setItem(branchStorageKey(bid), JSON.stringify({i:[...inv],l:trimmed}));
+      console.warn('Storage quota: archive dropped for branch', bid);
+    } catch(e2){ console.error('Storage full — cannot save:', e2); }
+  }
   renderStats();
   updateSyncBtnIdle();
+  updateStorageMonitor();
+}
+
+function getStorageUsage(){
+  try {
+    let total = 0;
+    for(let i = 0; i < localStorage.length; i++){
+      const k = localStorage.key(i);
+      total += (k.length + (localStorage.getItem(k)||'').length) * 2; // UTF-16
+    }
+    return total;
+  } catch(e){ return 0; }
+}
+
+function updateStorageMonitor(){
+  const el = document.getElementById('storageMon');
+  if(!el) return;
+  const used = getStorageUsage();
+  const limit = 5 * 1024 * 1024; // 5MB
+  const pct = Math.round((used / limit) * 100);
+  const kb = Math.round(used / 1024);
+  let color, icon;
+  if(pct < 50)     { color = 'var(--green)';  icon = '💾'; }
+  else if(pct < 75){ color = 'var(--amber)';  icon = '⚠️'; }
+  else             { color = 'var(--red)';     icon = '🔴'; }
+  el.title = `Storage: ${kb} KB used of ~5120 KB (${pct}%)`;
+  el.innerHTML = `<span style="font-size:9px">${icon}</span><span style="font-family:var(--mono);font-size:8px;color:${color}">${pct}%</span>`;
+  el.style.borderColor = pct >= 75 ? color : 'var(--border)';
 }
 function load(){
   const bid = activeBranchId();
@@ -4160,9 +4216,20 @@ function getSyncStatusHtml(){
 function filteredLogs(){
   const now=new Date();
   const cutoff={today:new Date(now.getFullYear(),now.getMonth(),now.getDate()),week:new Date(now-7*864e5),month:new Date(now-30*864e5),all:new Date(0)}[histDateMode]||new Date(0);
+  // For 'all' date mode, merge in archived logs too
+  let source = logs;
+  if(histDateMode==='all'){
+    const bid = activeBranchId();
+    if(bid){
+      try{
+        const arch = JSON.parse(localStorage.getItem(branchStorageKey(bid)+'_arch')||'[]');
+        if(arch.length) source = [...logs, ...arch];
+      }catch(e){}
+    }
+  }
   const rx=(document.getElementById('histRxSearch')||{}).value||'';
   const rxLower=rx.toLowerCase();
-  return logs.filter(l=>{
+  return source.filter(l=>{
     let entryDate;
     try{
       if(l.iso){ entryDate=new Date(l.iso); }
@@ -4678,77 +4745,46 @@ function initTheme(){
 }
 
 initTheme();
+updateStorageMonitor();
 
-// ══════════════════════════════════════════════
-// STOCK SEED — All Branches, All Types, All Coatings (qty 1 each)
-// Runs once; skips if already seeded
-// ══════════════════════════════════════════════
-(function seedAllBranches(){
-  const SEED_FLAG = 'spec_seed_allbranches_v3';
-  if(localStorage.getItem(SEED_FLAG)) return;
-  const BRANCHES   = ['twese','nyubwa','mengo','mbarara'];
-  const COATINGS   = ['cr39_clear','white_hmc','sss_mar','white_bluecut','bluecut_sss'];
-  const PRESB_TYPES= ['Bifocal','Progressive'];
-  const EYES_ALL   = ['RE','LE','PAIR'];
-  const SPH_VALS=[], CYL_VALS=[0.00];
-  for(let s=20.00; s>=-20.01; s-=0.25) SPH_VALS.push(parseFloat(s.toFixed(2)));
-  for(let c=-0.25; c>=-6.01;  c-=0.25) CYL_VALS.push(parseFloat(c.toFixed(2)));
-  const PRESB_SPH=[];
-  for(let s=4.00; s>=-4.01; s-=0.25) PRESB_SPH.push(parseFloat(s.toFixed(2)));
-  const ADD_VALS=[];
-  for(let a=1.00; a<=3.51; a+=0.25) ADD_VALS.push(parseFloat(a.toFixed(2)));
-  const fs = v => v===0?'0.00':((v>0?'+':'')+v.toFixed(2));
-  const fa = v => '+'+v.toFixed(2);
-  const now = new Date();
-  const d = now.toLocaleDateString('en-GB',{day:'2-digit',month:'short'});
-  const t = now.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
-  const iso = now.toISOString();
-  let totalSKUs = 0;
-  BRANCHES.forEach(branch => {
-    const BK = 'spec_lens_' + branch + '_v1';
-    const existing = JSON.parse(localStorage.getItem(BK)||'{"i":[],"l":[]}');
-    const inv = new Map(existing.i||[]);
-
-    // ── Wipe ALL existing presbyopia keys first (RE, LE, PAIR) ──
-    COATINGS.forEach(coat => {
-      PRESB_TYPES.forEach(ptype => {
-        PRESB_SPH.forEach(sph => {
-          ADD_VALS.forEach(add => {
-            EYES_ALL.forEach(eye => {
-              inv.delete(ptype+'|'+coat+'|'+eye+'|'+fs(sph)+'|'+fa(add));
+// ── Clean up old heavy seed data (v1/v2/v3) if present ──
+(function cleanOldSeeds(){
+  const oldFlags = ['spec_seed_allbranches_v1','spec_seed_allbranches_v2','spec_seed_allbranches_v3'];
+  const hadOld = oldFlags.some(f => localStorage.getItem(f));
+  if(!hadOld) return;
+  // Remove seed flags
+  oldFlags.forEach(f => localStorage.removeItem(f));
+  // Strip all seeded keys (qty=1) from branch inventories, keeping only real stock (qty>1 or OUT-tracked zeros from real dispenses)
+  // Actually: just wipe the bloated presb keys — SV keys with qty=1 are indistinguishable from real stock, leave them
+  const BRANCHES = ['twese','nyubwa','mengo','mbarara'];
+  const COATINGS = ['cr39_clear','white_hmc','sss_mar','white_bluecut','bluecut_sss'];
+  const PRESB_TYPES = ['Bifocal','Progressive'];
+  const PRESB_SPH=[], ADD_VALS=[];
+  for(let s=4.00;s>=-4.01;s-=0.25) PRESB_SPH.push(parseFloat(s.toFixed(2)));
+  for(let a=1.00;a<=3.51;a+=0.25) ADD_VALS.push(parseFloat(a.toFixed(2)));
+  const fs=v=>v===0?'0.00':((v>0?'+':'')+v.toFixed(2));
+  const fa=v=>'+'+v.toFixed(2);
+  BRANCHES.forEach(branch=>{
+    const BK='spec_lens_'+branch+'_v1';
+    const data=JSON.parse(localStorage.getItem(BK)||'{"i":[],"l":[]}');
+    const inv=new Map(data.i||[]);
+    // Remove all presb seed keys (RE=1 and LE=1 were the seed values)
+    COATINGS.forEach(coat=>{
+      PRESB_TYPES.forEach(pt=>{
+        PRESB_SPH.forEach(sph=>{
+          ADD_VALS.forEach(add=>{
+            ['RE','LE','PAIR'].forEach(eye=>{
+              const k=pt+'|'+coat+'|'+eye+'|'+fs(sph)+'|'+fa(add);
+              if(inv.get(k)===1) inv.delete(k); // only remove seed qty=1, keep real stock
             });
           });
         });
       });
     });
-
-    // ── Re-seed SV (set to 1 if not already stocked above 1) ──
-    COATINGS.forEach(coat => {
-      SPH_VALS.forEach(sph => {
-        CYL_VALS.forEach(cyl => {
-          const key = 'Single|'+coat+'|'+fs(sph)+'|'+fs(cyl);
-          if(!inv.has(key)) inv.set(key, 1);
-        });
-      });
-
-      // ── Presbyopia: RE=1, LE=1 only (= 0.5 pairs each = 1 full pair) ──
-      PRESB_TYPES.forEach(ptype => {
-        PRESB_SPH.forEach(sph => {
-          ADD_VALS.forEach(add => {
-            ['RE','LE'].forEach(eye => {
-              inv.set(ptype+'|'+coat+'|'+eye+'|'+fs(sph)+'|'+fa(add), 1);
-            });
-          });
-        });
-      });
-    });
-
-    const seedLog = {d,t,iso,f:'IN',l:'BULK',q:inv.size,r:'Full Stock Seed v3 — Presb RE+LE 1pc each',tp:'ALL',ct:'ALL',ey:'—',user:'Admin',syncId:'seed_allbranches_v3_'+branch,synced:false};
-    localStorage.setItem(BK, JSON.stringify({i:[...inv],l:[seedLog,...(existing.l||[])]}));
-    totalSKUs += inv.size;
+    data.i=[...inv];
+    localStorage.setItem(BK,JSON.stringify(data));
   });
-  localStorage.setItem(SEED_FLAG,'1');
-  console.log('✅ Seed v3 complete —', BRANCHES.length, 'branches,', totalSKUs, 'total SKUs');
+  console.log('🧹 Old seed data cleaned from localStorage');
 })();
 
 // ══════════════════════════════════════════════
