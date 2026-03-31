@@ -148,6 +148,7 @@ body::after{content:'';position:fixed;inset:0;background-image:url("data:image/s
 .mcell{width:46px;height:38px;border:none;border-radius:8px;font-family:var(--mono);font-size:15px;cursor:pointer;transition:.12s;font-weight:500}
 .mcell:hover{transform:scale(1.12);filter:brightness(1.3)}
 .m0  {background:rgba(255,255,255,0.025);color:rgba(255,255,255,0.15)}
+.mout{background:rgba(255,61,113,0.08);color:rgba(255,61,113,0.45);border:1px dashed rgba(255,61,113,0.30);font-size:7px !important;letter-spacing:.5px;font-weight:700 !important;font-family:var(--mono) !important;line-height:1.1}
 .mlow{background:rgba(255,61,113,0.15);color:var(--red);border:1px solid rgba(255,61,113,0.35);animation:electricRed 2s ease-in-out infinite}
 .mmid{background:rgba(255,170,0,0.12);color:var(--amber);border:1px solid rgba(255,170,0,0.30)}
 .mok {background:rgba(0,255,140,0.10);color:var(--green);border:1px solid rgba(0,255,140,0.28)}
@@ -267,6 +268,25 @@ input.compact{margin-bottom:0;padding:10px;font-size:13px}
 .save-zone{display:none;background:rgba(0,240,255,0.04);border:1px solid rgba(0,240,255,0.25);padding:16px;border-radius:var(--r);margin-top:12px;box-shadow:var(--neu-shadow-sm)}
 .out-list{margin-top:10px;max-height:200px;overflow-y:auto;border:1px solid var(--border2);border-radius:8px;padding:4px;background:rgba(0,0,0,0.3)}
 .out-item{display:flex;justify-content:space-between;align-items:center;padding:10px;border-bottom:1px solid rgba(255,255,255,0.04);font-family:var(--mono);font-size:11px}
+
+/* ── OUT OF STOCK SCAN MODAL ── */
+.oos-overlay{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(0,0,0,0.88);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);opacity:0;pointer-events:none;transition:opacity .2s}
+.oos-overlay.open{opacity:1;pointer-events:all}
+.oos-box{width:100%;max-width:400px;background:linear-gradient(145deg,rgba(28,6,10,0.99),rgba(18,4,8,0.99));border:2px solid var(--red);border-radius:22px;padding:30px 24px;box-shadow:0 0 50px rgba(255,61,113,0.50),0 0 100px rgba(255,61,113,0.18),var(--neu-shadow);animation:oosSlideIn .28s cubic-bezier(.34,1.56,.64,1) both}
+@keyframes oosSlideIn{from{transform:scale(0.86) translateY(24px);opacity:0}to{transform:scale(1) translateY(0);opacity:1}}
+.oos-icon{font-size:56px;text-align:center;margin-bottom:8px;animation:electricRed 1.4s ease-in-out infinite;display:block}
+.oos-title{font-family:var(--display);font-size:30px;font-weight:700;color:var(--red);text-align:center;letter-spacing:3px;text-transform:uppercase;text-shadow:0 0 24px rgba(255,61,113,0.75);margin-bottom:4px}
+.oos-subtitle{font-family:var(--mono);font-size:9px;color:rgba(255,61,113,0.55);text-align:center;letter-spacing:2.5px;text-transform:uppercase;margin-bottom:22px}
+.oos-lens-card{background:rgba(255,61,113,0.07);border:1px solid rgba(255,61,113,0.22);border-radius:14px;padding:16px;margin-bottom:22px}
+.oos-lens-rx{font-family:var(--display);font-size:22px;color:var(--text);font-weight:700;margin-bottom:8px;line-height:1.2}
+.oos-lens-meta{font-family:var(--mono);font-size:10px;color:var(--text2);line-height:1.8}
+.oos-qty-row{display:flex;align-items:center;justify-content:space-between;margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,61,113,0.15)}
+.oos-qty-label{font-family:var(--mono);font-size:9px;color:rgba(255,61,113,0.55);text-transform:uppercase;letter-spacing:1.5px}
+.oos-qty-val{font-family:var(--display);font-size:36px;color:var(--red);line-height:1;text-shadow:0 0 12px rgba(255,61,113,0.5)}
+.oos-btn-transfer{width:100%;padding:15px;background:linear-gradient(135deg,rgba(255,61,113,0.18),rgba(255,61,113,0.08));border:1.5px solid rgba(255,61,113,0.55);border-radius:13px;color:var(--red);font-family:var(--display);font-size:15px;font-weight:700;letter-spacing:2px;cursor:pointer;margin-bottom:10px;transition:.15s;box-shadow:0 0 18px rgba(255,61,113,0.12)}
+.oos-btn-transfer:hover{background:rgba(255,61,113,0.28);box-shadow:0 0 28px rgba(255,61,113,0.32)}
+.oos-btn-dismiss{width:100%;padding:12px;background:rgba(255,255,255,0.035);border:1px solid rgba(255,255,255,0.09);border-radius:13px;color:var(--text2);font-family:var(--mono);font-size:11px;cursor:pointer;transition:.15s;letter-spacing:.5px}
+.oos-btn-dismiss:hover{background:rgba(255,255,255,0.07);color:var(--text)}
 
 /* ── DATA TABLE ── */
 .data-table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:11px}
@@ -855,7 +875,8 @@ input.compact{margin-bottom:0;padding:10px;font-size:13px}
         <div class="leg-item"><div class="leg-dot" style="background:rgba(0,232,122,.3);border:1px solid var(--green)"></div><span style="color:var(--green)">8+ GOOD</span></div>
         <div class="leg-item"><div class="leg-dot" style="background:rgba(245,197,24,.3);border:1px solid var(--yellow)"></div><span style="color:var(--yellow)">4–7 MODERATE</span></div>
         <div class="leg-item"><div class="leg-dot" style="background:rgba(255,59,78,.3);border:1px solid var(--red)"></div><span style="color:var(--red)">1–3 LOW</span></div>
-        <div class="leg-item"><div class="leg-dot" style="background:rgba(255,255,255,.05)"></div><span style="color:var(--text2)">0 EMPTY</span></div>
+        <div class="leg-item"><div class="leg-dot" style="background:rgba(255,61,113,0.08);border:1px dashed rgba(255,61,113,0.35)"></div><span style="color:rgba(255,61,113,0.6)">OUT OF STOCK</span></div>
+        <div class="leg-item"><div class="leg-dot" style="background:rgba(255,255,255,.05)"></div><span style="color:var(--text2)">· NEVER STOCKED</span></div>
       </div>
 
       <!-- FILTER BAR: Type + Coating -->
@@ -3085,7 +3106,20 @@ window.manualStockOut=()=>{
   const sph=parseFloat(document.getElementById('mSph').value);
   const cyl=parseFloat(document.getElementById('mCyl').value);
   const qty=parseInt(document.getElementById('mQty').value)||1;
-  updateInventory(makeSVKey(activeType,activeCoating,sph,cyl),qty,'OUT','Manual Out',activeType,activeCoating,'—');
+  const key=makeSVKey(activeType,activeCoating,sph,cyl);
+  const cur=inv.get(key)||0;
+  if(qty>cur){
+    if(cur===0){
+      alert(`⚠ OUT OF STOCK\n\n${activeType} · ${coatLabel(activeCoating)}\nSPH ${fmtSph(sph)} / CYL ${fmtCyl(cyl)}\n\nThis lens has 0 units remaining. Cannot dispense.`);
+    } else {
+      alert(`⚠ Insufficient stock\n\nOnly ${cur} pcs available. Cannot dispense ${qty} pcs.`);
+    }
+    return;
+  }
+  updateInventory(key,qty,'OUT','Manual Out',activeType,activeCoating,'—');
+  if((cur-qty)===0){
+    setTimeout(()=>alert(`⚠ OUT OF STOCK\n\n${activeType} · ${coatLabel(activeCoating)}\nSPH ${fmtSph(sph)} / CYL ${fmtCyl(cyl)}\n\nLast unit dispensed — now out of stock!`),100);
+  }
   renderMatrix();
 };
 window.presbyStockIn=()=>{
@@ -3101,7 +3135,20 @@ window.presbyStockOut=()=>{
   const add=parseFloat(document.getElementById('pAdd').value);
   const qty=parseInt(document.getElementById('pQty').value)||1;
   const eye=document.getElementById('pEye').value;
-  updateInventory(makePresbKey(activeType,activeCoating,eye,sph,add),qty,'OUT','Manual Out',activeType,activeCoating,eye);
+  const key=makePresbKey(activeType,activeCoating,eye,sph,add);
+  const cur=inv.get(key)||0;
+  if(qty>cur){
+    if(cur===0){
+      alert(`⚠ OUT OF STOCK\n\n${activeType} · ${coatLabel(activeCoating)} · ${eye}\nSPH ${fmtSph(sph)} ADD ${fmtAdd(add)}\n\nThis lens has 0 units remaining. Cannot dispense.`);
+    } else {
+      alert(`⚠ Insufficient stock\n\nOnly ${cur} pcs available. Cannot dispense ${qty} pcs.`);
+    }
+    return;
+  }
+  updateInventory(key,qty,'OUT','Manual Out',activeType,activeCoating,eye);
+  if((cur-qty)===0){
+    setTimeout(()=>alert(`⚠ OUT OF STOCK\n\n${activeType} · ${coatLabel(activeCoating)} · ${eye}\nSPH ${fmtSph(sph)} ADD ${fmtAdd(add)}\n\nLast unit dispensed — now out of stock!`),100);
+  }
   renderMatrix();
 };
 
@@ -3128,7 +3175,14 @@ function updateInventory(key,qty,action,rec,ltype,coat,eye){
 // ══════════════════════════════════════════════
 // MATRIX RENDER
 // ══════════════════════════════════════════════
-function cellClass(q){if(q===0)return 'm0';if(q<=3)return 'mlow';if(q<=7)return 'mmid';return 'mok';}
+function cellClass(q,key){
+  if(q===0){
+    // Check if this item was ever stocked (exists in inv map with explicit 0)
+    if(key!==undefined && inv.has(key)) return 'mout';
+    return 'm0';
+  }
+  if(q<=3)return 'mlow';if(q<=7)return 'mmid';return 'mok';
+}
 
 // Returns effective qty for an eye: RE or LE = own stock + PAIR stock
 function getEffQty(eye, sph, add){
@@ -3349,7 +3403,9 @@ function buildPresbTable(tableId, mode){
         const pairQ=inv.get(makePresbKey(activeType,activeCoating,'PAIR',s,a))||0;
         const tipExtra=pairQ>0?`\n(${ownQ} ${eye} + ${pairQ} PAIR)`:' ';
         const tip=`${activeType} · ${coatLabel(activeCoating)} · ${eye}\nSPH ${fmtSph(s)} ADD ${fmtAdd(a)} = ${q} pcs${tipExtra}`;
-        h+=`<td><button class="mcell ${cellClass(q)}" title="${tip}" onclick="quickAdjustPresb('${activeType}','${activeCoating}','${eye}','${fmtSph(s)}','${a.toFixed(2)}')">${q||'·'}</button></td>`;
+        const pKey=makePresbKey(activeType,activeCoating,eye,s,a);
+        const isTrackedZero = q===0 && inv.has(pKey);
+        h+=`<td><button class="mcell ${cellClass(q,pKey)}" title="${tip}" onclick="quickAdjustPresb('${activeType}','${activeCoating}','${eye}','${fmtSph(s)}','${a.toFixed(2)}')">${isTrackedZero?'OUT':q||'·'}</button></td>`;
       });
       h+='</tr>';
     });
@@ -3376,7 +3432,7 @@ function renderMatrix(){
         const q=inv.get(key)||0;
         const isPl=c===0;
         const cellStyle=isPl?'border-left:2px solid rgba(0,212,255,.2);':'';
-        h+=`<td style="${cellStyle}"><button class="mcell ${cellClass(q)}" title="${activeType} · ${coatLabel(activeCoating)}\n${fmtSph(s)} / ${fmtCyl(c)}${isPl?' (Plano — no cyl)':''} = ${q} pcs" onclick="quickAdjustSV('${activeType}','${activeCoating}','${fmtSph(s)}','${fmtCyl(c)}')">${q||'·'}</button></td>`;
+        h+=`<td style="${cellStyle}"><button class="mcell ${cellClass(q,key)}" title="${activeType} · ${coatLabel(activeCoating)}\n${fmtSph(s)} / ${fmtCyl(c)}${isPl?' (Plano — no cyl)':''} = ${q} pcs" onclick="quickAdjustSV('${activeType}','${activeCoating}','${fmtSph(s)}','${fmtCyl(c)}')">${q===0&&inv.has(key)?'OUT':q||'·'}</button></td>`;
       });
       h+='</tr>';
     });
@@ -3440,12 +3496,33 @@ function renderMatrix(){
 window.quickAdjustSV=(type,coat,sph,cyl)=>{
   const key=`${type}|${coat}|${sph}|${cyl}`;
   const cur=inv.get(key)||0;
+  if(cur===0 && inv.has(key)){
+    const restock=confirm(`⚠ OUT OF STOCK\n\n${type} · ${coatLabel(coat)}\nSPH ${sph} / CYL ${cyl}\n\nThis lens is currently out of stock.\nClick OK to restock it, or Cancel to dismiss.`);
+    if(!restock) return;
+    const inp=prompt(`Restock ${type} SPH ${sph} / CYL ${cyl}\nEnter new total quantity:`);
+    if(inp===null||inp.trim()==='') return;
+    const nv=parseInt(inp);
+    if(isNaN(nv)||nv<0){alert('Invalid number.');return;}
+    if(nv===0) return;
+    updateInventory(key,nv,'IN','Restock',type,coat,'—');
+    renderMatrix();
+    return;
+  }
   const inp=prompt(`${type} · ${coatLabel(coat)}\nSPH ${sph} / CYL ${cyl}\n\nCurrent: ${cur} pcs\nEnter new total:`);
   if(inp===null||inp.trim()==='')return;
   const nv=parseInt(inp);
   if(isNaN(nv)||nv<0){alert('Invalid number.');return;}
-  const diff=nv-cur; if(diff===0)return;
-  updateInventory(key,Math.abs(diff),diff>0?'IN':'OUT','Matrix Adjust',type,coat,'—');
+  if(nv>cur){
+    const diff=nv-cur;
+    updateInventory(key,diff,'IN','Matrix Adjust',type,coat,'—');
+  } else if(nv<cur){
+    const diff=cur-nv;
+    if(nv===0){
+      const confirm_oos=confirm(`⚠ Setting to 0 will mark this lens as OUT OF STOCK.\n\nSPH ${sph} / CYL ${cyl}\n\nContinue?`);
+      if(!confirm_oos) return;
+    }
+    updateInventory(key,diff,'OUT','Matrix Adjust',type,coat,'—');
+  }
   renderMatrix();
 };
 
@@ -3453,12 +3530,31 @@ window.quickAdjustSV=(type,coat,sph,cyl)=>{
 window.quickAdjustPresb=(type,coat,eye,sph,add)=>{
   const key=`${type}|${coat}|${eye}|${sph}|+${parseFloat(add).toFixed(2)}`;
   const cur=inv.get(key)||0;
+  if(cur===0 && inv.has(key)){
+    const restock=confirm(`⚠ OUT OF STOCK\n\n${type} · ${coatLabel(coat)} · ${eye}\nSPH ${sph}  ADD +${parseFloat(add).toFixed(2)}\n\nThis lens is currently out of stock.\nClick OK to restock it, or Cancel to dismiss.`);
+    if(!restock) return;
+    const inp=prompt(`Restock ${type} ${eye} SPH ${sph} ADD +${parseFloat(add).toFixed(2)}\nEnter new total quantity:`);
+    if(inp===null||inp.trim()==='') return;
+    const nv=parseInt(inp);
+    if(isNaN(nv)||nv<0){alert('Invalid number.');return;}
+    if(nv===0) return;
+    updateInventory(key,nv,'IN','Restock',type,coat,eye);
+    renderMatrix();
+    return;
+  }
   const inp=prompt(`${type} · ${coatLabel(coat)} · ${eye}\nSPH ${sph}  ADD +${parseFloat(add).toFixed(2)}\n\nCurrent: ${cur} pcs\nEnter new total:`);
   if(inp===null||inp.trim()==='')return;
   const nv=parseInt(inp);
   if(isNaN(nv)||nv<0){alert('Invalid number.');return;}
-  const diff=nv-cur; if(diff===0)return;
-  updateInventory(key,Math.abs(diff),diff>0?'IN':'OUT','Matrix Adjust',type,coat,eye);
+  if(nv>cur){
+    updateInventory(key,nv-cur,'IN','Matrix Adjust',type,coat,eye);
+  } else if(nv<cur){
+    if(nv===0){
+      const confirm_oos=confirm(`⚠ Setting to 0 will mark this lens as OUT OF STOCK.\n\n${eye} SPH ${sph} ADD +${parseFloat(add).toFixed(2)}\n\nContinue?`);
+      if(!confirm_oos) return;
+    }
+    updateInventory(key,cur-nv,'OUT','Matrix Adjust',type,coat,eye);
+  }
   renderMatrix();
 };
 
@@ -3862,6 +3958,25 @@ function onDetected(txt){
     document.getElementById('saveZoneIn').style.display='block';
     document.getElementById('scanPrompt').style.display='none';
   } else {
+    // ── Check out-of-stock BEFORE showing confirm zone ──
+    const curQty = inv.get(result.key) || 0;
+    const isTrackedZero = curQty === 0 && inv.has(result.key);
+    const isAbsoluteZero = curQty === 0;
+    if(isAbsoluteZero && scanMode === 'OUT'){
+      playBeep(false); vibrate(false);
+      const p = result.parsed;
+      // Build display strings
+      let rxLine = '—', metaLine = '—';
+      if(p){
+        if(p.cyl !== null) rxLine = `SPH ${p.sph} / CYL ${p.cyl}`;
+        else rxLine = `SPH ${p.sph}${p.add ? '  ADD ' + p.add : ''}`;
+        metaLine = `${p.type} · ${p.coat}${p.eye ? ' · ' + p.eye : ''}`;
+      }
+      document.getElementById('oosRx').textContent = rxLine;
+      document.getElementById('oosMeta').textContent = metaLine;
+      document.getElementById('oosOverlay').classList.add('open');
+      return;
+    }
     // Show confirmation before adding to outbox
     const labelHTML = result.parsed
       ? `<div style="font-family:var(--mono);font-size:11px;color:var(--text2);line-height:1.7;margin-bottom:6px">
@@ -3943,6 +4058,40 @@ window.saveStockOutBulk=()=>{
   save();
 };
 window.stopScanner=()=>{if(scanner){scanner.stop().then(()=>scanner=null);}};
+
+// ── OOS MODAL ──
+window.closeOosModal = () => {
+  document.getElementById('oosOverlay').classList.remove('open');
+  // Reset cooldown so next scan fires immediately
+  scanCooldown = false;
+};
+
+window.oosRequestTransfer = () => {
+  closeOosModal();
+  // Navigate to admin transfer tab with lens pre-info
+  const p = activeLens ? parseLensQR(activeLens).parsed : null;
+  const rxHint = p ? parsedLabel(p, activeLens) : activeLens;
+  // Go to admin → transfers tab
+  stopScanner();
+  go('admin');
+  // Switch to transfers tab
+  setTimeout(() => {
+    const transferTab = document.querySelector('[onclick*="transfers"]') ||
+                        document.querySelector('[data-tab="transfers"]');
+    if(transferTab) transferTab.click();
+    // Show a reminder banner in the transfer panel
+    const msgEl = document.getElementById('txMsg');
+    if(msgEl){
+      msgEl.textContent = `⇄ Requesting transfer for: ${rxHint}`;
+      msgEl.style.color = 'var(--amber)';
+      msgEl.style.display = 'block';
+    }
+    // Pre-select destination branch as current branch
+    const toBranch = activeBranchId();
+    const toSel = document.getElementById('txTo');
+    if(toSel && toBranch) toSel.value = toBranch;
+  }, 300);
+};;
 
 // ══════════════════════════════════════════════
 // STATS & HISTORY
@@ -4529,6 +4678,103 @@ function initTheme(){
 }
 
 initTheme();
+
+// ══════════════════════════════════════════════
+// STOCK SEED — All Branches, All Types, All Coatings (qty 1 each)
+// Runs once; skips if already seeded
+// ══════════════════════════════════════════════
+(function seedAllBranches(){
+  const SEED_FLAG = 'spec_seed_allbranches_v3';
+  if(localStorage.getItem(SEED_FLAG)) return;
+  const BRANCHES   = ['twese','nyubwa','mengo','mbarara'];
+  const COATINGS   = ['cr39_clear','white_hmc','sss_mar','white_bluecut','bluecut_sss'];
+  const PRESB_TYPES= ['Bifocal','Progressive'];
+  const EYES_ALL   = ['RE','LE','PAIR'];
+  const SPH_VALS=[], CYL_VALS=[0.00];
+  for(let s=20.00; s>=-20.01; s-=0.25) SPH_VALS.push(parseFloat(s.toFixed(2)));
+  for(let c=-0.25; c>=-6.01;  c-=0.25) CYL_VALS.push(parseFloat(c.toFixed(2)));
+  const PRESB_SPH=[];
+  for(let s=4.00; s>=-4.01; s-=0.25) PRESB_SPH.push(parseFloat(s.toFixed(2)));
+  const ADD_VALS=[];
+  for(let a=1.00; a<=3.51; a+=0.25) ADD_VALS.push(parseFloat(a.toFixed(2)));
+  const fs = v => v===0?'0.00':((v>0?'+':'')+v.toFixed(2));
+  const fa = v => '+'+v.toFixed(2);
+  const now = new Date();
+  const d = now.toLocaleDateString('en-GB',{day:'2-digit',month:'short'});
+  const t = now.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+  const iso = now.toISOString();
+  let totalSKUs = 0;
+  BRANCHES.forEach(branch => {
+    const BK = 'spec_lens_' + branch + '_v1';
+    const existing = JSON.parse(localStorage.getItem(BK)||'{"i":[],"l":[]}');
+    const inv = new Map(existing.i||[]);
+
+    // ── Wipe ALL existing presbyopia keys first (RE, LE, PAIR) ──
+    COATINGS.forEach(coat => {
+      PRESB_TYPES.forEach(ptype => {
+        PRESB_SPH.forEach(sph => {
+          ADD_VALS.forEach(add => {
+            EYES_ALL.forEach(eye => {
+              inv.delete(ptype+'|'+coat+'|'+eye+'|'+fs(sph)+'|'+fa(add));
+            });
+          });
+        });
+      });
+    });
+
+    // ── Re-seed SV (set to 1 if not already stocked above 1) ──
+    COATINGS.forEach(coat => {
+      SPH_VALS.forEach(sph => {
+        CYL_VALS.forEach(cyl => {
+          const key = 'Single|'+coat+'|'+fs(sph)+'|'+fs(cyl);
+          if(!inv.has(key)) inv.set(key, 1);
+        });
+      });
+
+      // ── Presbyopia: RE=1, LE=1 only (= 0.5 pairs each = 1 full pair) ──
+      PRESB_TYPES.forEach(ptype => {
+        PRESB_SPH.forEach(sph => {
+          ADD_VALS.forEach(add => {
+            ['RE','LE'].forEach(eye => {
+              inv.set(ptype+'|'+coat+'|'+eye+'|'+fs(sph)+'|'+fa(add), 1);
+            });
+          });
+        });
+      });
+    });
+
+    const seedLog = {d,t,iso,f:'IN',l:'BULK',q:inv.size,r:'Full Stock Seed v3 — Presb RE+LE 1pc each',tp:'ALL',ct:'ALL',ey:'—',user:'Admin',syncId:'seed_allbranches_v3_'+branch,synced:false};
+    localStorage.setItem(BK, JSON.stringify({i:[...inv],l:[seedLog,...(existing.l||[])]}));
+    totalSKUs += inv.size;
+  });
+  localStorage.setItem(SEED_FLAG,'1');
+  console.log('✅ Seed v3 complete —', BRANCHES.length, 'branches,', totalSKUs, 'total SKUs');
+})();
+
+// ══════════════════════════════════════════════
+// STOCK SEED — Main Branch (Twese) White HMC
+// Runs once on first load; skips if already seeded
+// ══════════════════════════════════════════════
+(function seedWhiteHMC(){
+  const SEED_FLAG = 'spec_seed_twese_whmc_v1';
+  if(localStorage.getItem(SEED_FLAG)) return; // already done
+  const BRANCH_KEY = 'spec_lens_twese_v1';
+  const entries = [["Single|white_hmc|-5.50|-0.50",4],["Single|white_hmc|-5.75|-0.50",2],["Single|white_hmc|-6.00|-0.50",3],["Single|white_hmc|-6.25|-0.50",2],["Single|white_hmc|-6.50|-0.50",2],["Single|white_hmc|-6.75|-0.50",2],["Single|white_hmc|-6.50|-1.00",2],["Single|white_hmc|-6.75|-1.00",2],["Single|white_hmc|-7.00|-1.00",2],["Single|white_hmc|-7.25|-1.00",2],["Single|white_hmc|-7.50|-1.00",2],["Single|white_hmc|-7.75|-1.00",1],["Single|white_hmc|-2.00|-2.00",2],["Single|white_hmc|-2.25|-2.00",2],["Single|white_hmc|-2.50|-2.00",2],["Single|white_hmc|-2.75|-2.00",2],["Single|white_hmc|-3.00|-2.00",2],["Single|white_hmc|-3.25|-2.00",3],["Single|white_hmc|-3.50|-2.00",2],["Single|white_hmc|-3.75|-2.00",2],["Single|white_hmc|0.00|-5.00",3],["Single|white_hmc|-0.25|-5.00",3],["Single|white_hmc|-0.50|-5.00",3],["Single|white_hmc|-0.75|-5.00",3],["Single|white_hmc|-1.00|-5.00",3],["Single|white_hmc|0.00|-5.25",2],["Single|white_hmc|-0.25|-5.25",1],["Single|white_hmc|-0.50|-5.25",1],["Single|white_hmc|-0.75|-5.25",1],["Single|white_hmc|-1.00|-5.25",1],["Single|white_hmc|-1.25|-5.25",1],["Single|white_hmc|-1.50|-5.25",1],["Single|white_hmc|-1.75|-5.25",1]];
+  const now = new Date();
+  const d = now.toLocaleDateString('en-GB',{day:'2-digit',month:'short'});
+  const t = now.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+  const iso = now.toISOString();
+  const existing = JSON.parse(localStorage.getItem(BRANCH_KEY)||'{"i":[],"l":[]}');
+  const invMap = new Map(existing.i||[]);
+  const newLogs = entries.map(([k,qty])=>{
+    invMap.set(k,(invMap.get(k)||0)+qty);
+    return {d,t,iso,f:'IN',l:k,q:qty,r:'Stock Load — White HMC',tp:'Single',ct:'White HMC',ey:'—',user:'Admin',syncId:'seed_whmc_'+k,synced:false};
+  });
+  localStorage.setItem(BRANCH_KEY, JSON.stringify({i:[...invMap],l:[...newLogs,...(existing.l||[])]}));
+  localStorage.setItem(SEED_FLAG,'1');
+  console.log('✅ White HMC stock seeded for Twese: 33 SKUs, 67 units');
+})();
+
 bootApp();
 })();
 </script>
@@ -4551,6 +4797,25 @@ bootApp();
     <div style="margin-top:14px;text-align:center">
       <span style="font-family:var(--mono);font-size:9px;color:var(--green)">✓ Hardcoded config — always connected</span>
     </div>
+  </div>
+</div>
+
+<!-- ── OUT OF STOCK SCAN MODAL ── -->
+<div class="oos-overlay" id="oosOverlay">
+  <div class="oos-box">
+    <span class="oos-icon">🚫</span>
+    <div class="oos-title">Out of Stock</div>
+    <div class="oos-subtitle">Cannot dispense this lens</div>
+    <div class="oos-lens-card">
+      <div class="oos-lens-rx" id="oosRx">—</div>
+      <div class="oos-lens-meta" id="oosMeta">—</div>
+      <div class="oos-qty-row">
+        <span class="oos-qty-label">Units Available</span>
+        <span class="oos-qty-val">0</span>
+      </div>
+    </div>
+    <button class="oos-btn-transfer" onclick="oosRequestTransfer()">⇄ REQUEST TRANSFER</button>
+    <button class="oos-btn-dismiss" onclick="closeOosModal()">✕ DISMISS — SCAN NEXT</button>
   </div>
 </div>
 
