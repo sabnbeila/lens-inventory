@@ -149,7 +149,7 @@ body::after{content:'';position:fixed;inset:0;background-image:url("data:image/s
 .mcell:hover{transform:scale(1.12);filter:brightness(1.3)}
 .m0  {background:rgba(255,255,255,0.025);color:rgba(255,255,255,0.15)}
 .mout{background:rgba(255,61,113,0.08);color:rgba(255,61,113,0.45);border:1px dashed rgba(255,61,113,0.30);font-size:7px !important;letter-spacing:.5px;font-weight:700 !important;font-family:var(--mono) !important;line-height:1.1}
-.mlow{background:rgba(255,61,113,0.15);color:var(--red);border:1px solid rgba(255,61,113,0.35);animation:electricRed 2s ease-in-out infinite}
+.mlow{background:rgba(255,61,113,0.15);color:var(--red);border:1px solid rgba(255,61,113,0.45)}
 .mmid{background:rgba(255,170,0,0.12);color:var(--amber);border:1px solid rgba(255,170,0,0.30)}
 .mok {background:rgba(0,255,140,0.10);color:var(--green);border:1px solid rgba(0,255,140,0.28)}
 
@@ -171,7 +171,7 @@ body::after{content:'';position:fixed;inset:0;background-image:url("data:image/s
 .sr-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;margin-bottom:12px}
 .sr-item{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-radius:10px;border:1px solid var(--border2);background:var(--glass);font-family:var(--mono);font-size:12px;gap:8px;box-shadow:var(--neu-shadow-sm)}
 .sr-item.sr-found{border-color:rgba(0,255,140,0.35);background:rgba(0,255,140,0.05)}
-.sr-item.sr-low  {border-color:rgba(255,61,113,0.35);background:rgba(255,61,113,0.05);animation:electricRed 2.5s ease-in-out infinite}
+.sr-item.sr-low  {border-color:rgba(255,61,113,0.35);background:rgba(255,61,113,0.05)}
 .sr-item.sr-mid  {border-color:rgba(255,170,0,0.30);background:rgba(255,170,0,0.05)}
 .sr-item.sr-empty{border-color:var(--border2);opacity:.45}
 .sr-rx{font-size:13px;font-weight:500;letter-spacing:.3px}
@@ -3097,14 +3097,14 @@ window.setType=(type)=>{
   clearSearch();
   syncUI();
   syncSearchRow();
-  renderMatrix();
+  renderMatrixDebounced();
 };
 
 window.setCoating=(coatId)=>{
   activeCoating=coatId;
   document.querySelectorAll('.coat-pill').forEach(el=>el.classList.toggle('cp-active',el.id==='coat-'+coatId));
   updateBadge();
-  renderMatrix();
+  renderMatrixDebounced();
 };
 
 const EYE_PILL_CLASS={RE:'efp-re', LE:'efp-le', BOTH:'efp-both', PAIR:'efp-both'};
@@ -3115,7 +3115,7 @@ window.setGridEye=(eye)=>{
     if(!el) return;
     el.className='eye-filter-pill'+(e===eye?' '+EYE_PILL_CLASS[e]:'');
   });
-  renderMatrix();
+  renderMatrixDebounced();
 };
 
 function updateBadge(){
@@ -3231,6 +3231,11 @@ function updateInventory(key,qty,action,rec,ltype,coat,eye){
 // ══════════════════════════════════════════════
 // MATRIX RENDER
 // ══════════════════════════════════════════════
+let _renderMatrixTimer = null;
+function renderMatrixDebounced(){
+  clearTimeout(_renderMatrixTimer);
+  _renderMatrixTimer = setTimeout(renderMatrix, 80);
+}
 function cellClass(q,key){
   if(q===0){
     // Check if this item was ever stocked (exists in inv map with explicit 0)
@@ -4612,7 +4617,11 @@ async function pullBranchStock(branchId){
   if(activeBranchId()===branchId){
     inv = localInv;
     renderStats();
-    if(typeof renderMatrix==='function') renderMatrix();
+    // Only re-render matrix if the matrix screen is currently visible
+    const matrixScreen = document.getElementById('matrix');
+    if(matrixScreen && matrixScreen.classList.contains('active')){
+      if(typeof renderMatrix==='function') renderMatrix();
+    }
   }
 }
 
