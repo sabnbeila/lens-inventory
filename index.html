@@ -8,7 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Rajdhani:wght@400;500;600;700&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet"/>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
-<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Rajdhani:wght@400;500;600;700&family=JetBrains+Mono:wght@300;400;500&display=swap');
 *{box-sizing:border-box;margin:0;padding:0}
@@ -397,6 +397,23 @@ input.compact{margin-bottom:0;padding:10px;font-size:13px}
 /* ── MENU SCREEN HOME BUTTONS electric ── */
 #menu .panel[onclick]{transition:.2s;cursor:pointer}
 #menu .panel[onclick]:hover{animation:electricCyan 1.5s ease-in-out infinite}
+/* ── SNAP INPUTS (Stock Entry) ── */
+.se-snap-wrap{position:relative;}
+.se-snap-input{width:100%;height:42px;font-family:var(--mono);font-size:15px;font-weight:500;letter-spacing:.5px;padding:0 10px;background:var(--glass);border:1px solid var(--border);border-radius:var(--r2);color:var(--text);transition:border-color .15s,box-shadow .15s;box-sizing:border-box;}
+.se-snap-input:focus{outline:none;border-color:var(--cyan);box-shadow:0 0 0 2px rgba(0,240,255,.12),var(--neu-inset);}
+.se-snap-input.snap-ok{border-color:var(--green)!important;box-shadow:0 0 0 2px rgba(0,255,140,.12)!important;}
+.se-snap-input.snap-warn{border-color:var(--amber)!important;box-shadow:0 0 0 2px rgba(255,170,0,.12)!important;}
+.se-snap-pill{display:none;margin-top:4px;font-family:var(--mono);font-size:10px;font-weight:600;letter-spacing:.5px;padding:3px 8px;border-radius:5px;background:rgba(0,255,140,.08);color:var(--green);border:1px solid rgba(0,255,140,.22);}
+.se-snap-pill.warn{background:rgba(255,170,0,.08);color:var(--amber);border-color:rgba(255,170,0,.22);}
+.se-ac-list{display:none;position:absolute;top:46px;left:0;right:0;z-index:200;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);box-shadow:0 8px 24px rgba(0,0,0,.5);max-height:180px;overflow-y:auto;}
+.se-ac-list.open{display:block;}
+.se-ac-item{padding:8px 12px;font-family:var(--mono);font-size:12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border2);transition:background .1s;}
+.se-ac-item:last-child{border-bottom:none;}
+.se-ac-item:hover,.se-ac-item.highlighted{background:var(--panel2);color:var(--cyan);}
+.se-ac-item .ac-stock{font-size:10px;color:var(--text2);}
+.se-ac-item .ac-stock.low{color:var(--red);}
+.se-ac-item .ac-stock.ok{color:var(--green);}
+.se-field-wrap{position:relative;}
 </style>
 </head>
 <body>
@@ -818,49 +835,103 @@ input.compact{margin-bottom:0;padding:10px;font-size:13px}
     </div>
   </section>
   <section id="scanner" class="screen">
-    <div class="grid g2">
-      <div class="panel">
-        <div class="panel-title" id="scanMode">Scanner</div>
-        <div id="reader"></div>
-        <button class="btn btn-ghost" style="margin-top:10px" onclick="go('menu');stopScanner()">← BACK</button>
+    <div class="panel" style="max-width:520px;margin:0 auto">
+
+      <!-- Header + back -->
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px">
+        <button class="btn btn-ghost btn-sm" onclick="go('menu')" style="flex-shrink:0">← BACK</button>
+        <div style="font-family:var(--display);font-size:22px;letter-spacing:1px" id="scanMode">STOCK IN</div>
       </div>
-      <div class="panel">
-        <div id="modeToggleArea" class="toggle-wrap" style="display:none">
-          <div id="tOut" class="t-btn active-out" onclick="setOutMode('OUT')">OUT</div>
-          <div id="tRet" class="t-btn" onclick="setOutMode('RETURN')">RETURN</div>
-        </div>
-        <div id="saveZoneIn" class="save-zone">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-            <div style="font-size:10px;color:var(--accent2)">LENS IDENTIFIED</div>
-            <button onclick="dismissScanIn()" style="background:none;border:none;color:var(--text2);font-size:18px;cursor:pointer;line-height:1;padding:0 2px" title="Dismiss">✕</button>
+
+      <!-- Mode switch -->
+      <div class="toggle-wrap" style="margin-bottom:18px">
+        <div id="smIn"  class="t-btn active-out" onclick="setScanMode('IN')">📥 STOCK IN</div>
+        <div id="smOut" class="t-btn"             onclick="setScanMode('OUT')">📤 STOCK OUT</div>
+        <div id="smRet" class="t-btn"             onclick="setScanMode('RETURN')">↩ RETURN</div>
+      </div>
+
+      <!-- Lens type pills -->
+      <div style="font-family:var(--mono);font-size:9px;color:var(--text2);margin-bottom:5px;letter-spacing:.5px">LENS TYPE</div>
+      <div class="pill-group" style="margin-bottom:14px">
+        <div class="type-pill tp-single" id="se-pill-Single"      onclick="setSEType('Single')">Single Vision</div>
+        <div class="type-pill"           id="se-pill-Bifocal"     onclick="setSEType('Bifocal')">Bifocal</div>
+        <div class="type-pill"           id="se-pill-Progressive" onclick="setSEType('Progressive')">Progressive</div>
+      </div>
+
+      <!-- Coating pills -->
+      <div style="font-family:var(--mono);font-size:9px;color:var(--text2);margin-bottom:5px;letter-spacing:.5px">COATING</div>
+      <div class="pill-group" id="se-coatPills" style="margin-bottom:18px"></div>
+
+      <!-- SV fields -->
+      <div id="se-svRow" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+        <div class="se-field-wrap">
+          <div style="font-family:var(--mono);font-size:9px;color:var(--text2);margin-bottom:4px">SPH <span style="opacity:.5;font-size:8px">e.g. -3.5 or +1</span></div>
+          <div class="se-snap-wrap">
+            <input type="text" id="se-sph" class="se-snap-input" placeholder="-3.00" autocomplete="off" inputmode="text">
+            <div class="se-snap-pill" id="se-sph-pill"></div>
+            <div class="se-ac-list" id="se-sph-ac"></div>
           </div>
-          <div id="lensDataIn" style="font-family:var(--display);font-size:28px;margin:8px 0;color:var(--text);word-break:break-all">---</div>
-          <input type="number" id="qtyInputIn" value="1" min="1">
-          <button class="btn btn-gold" onclick="saveStockIn()">CONFIRM & SAVE</button>
         </div>
-        <div id="saveZoneOut" class="save-zone">
-          <div style="font-size:10px;color:var(--red)" id="batchLabel">OUTBOX (0)</div>
-          <div class="out-list" id="outItemsList"></div>
-          <input type="text" id="recipientInput" placeholder="Recipient (Dr. Nicho...)" style="margin-top:10px">
-          <button class="btn btn-gold" style="background:var(--red)" onclick="saveStockOutBulk()">COMPLETE</button>
-          <button class="btn btn-ghost" style="margin-top:8px" onclick="clearBulkList()">CLEAR</button>
-        </div>
-        <div id="confirmZoneOut" class="save-zone" style="display:none">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-            <div style="font-size:10px;color:var(--red)">CONFIRM STOCK OUT</div>
-            <button onclick="dismissConfirmOut()" style="background:none;border:none;color:var(--text2);font-size:18px;cursor:pointer;line-height:1;padding:0 2px" title="Dismiss">✕</button>
+        <div class="se-field-wrap">
+          <div style="font-family:var(--mono);font-size:9px;color:var(--text2);margin-bottom:4px">CYL <span style="opacity:.5;font-size:8px">0 = plano</span></div>
+          <div class="se-snap-wrap">
+            <input type="text" id="se-cyl" class="se-snap-input" placeholder="0.00" autocomplete="off" inputmode="text">
+            <div class="se-snap-pill" id="se-cyl-pill"></div>
+            <div class="se-ac-list" id="se-cyl-ac"></div>
           </div>
-          <div id="lensDataOut" style="margin:8px 0"></div>
-          <button class="btn btn-gold" style="background:var(--red);margin-bottom:8px" onclick="confirmOutItem()">✓ ADD TO OUTBOX</button>
-          <button class="btn btn-ghost" onclick="discardOutItem()">✗ DISCARD</button>
         </div>
-        <div id="scanPrompt" style="text-align:center;padding:30px;color:var(--text2)">
-          <div style="font-size:32px;opacity:.2">🔍</div>
-          <p style="font-size:11px">Ready. Beeps/Vibrates on success.</p>
+      </div>
+
+      <!-- Presb fields -->
+      <div id="se-presbyRow" style="display:none;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px">
+        <div class="se-field-wrap">
+          <div style="font-family:var(--mono);font-size:9px;color:var(--text2);margin-bottom:4px">SPH <span style="opacity:.5;font-size:8px">dist.</span></div>
+          <div class="se-snap-wrap">
+            <input type="text" id="se-psph" class="se-snap-input" placeholder="-1.00" autocomplete="off" inputmode="text">
+            <div class="se-snap-pill" id="se-psph-pill"></div>
+            <div class="se-ac-list" id="se-psph-ac"></div>
+          </div>
         </div>
-        <div style="margin-top:20px;border-top:1px solid rgba(180,170,240,0.25);padding-top:15px">
-          <table class="data-table"><thead><tr><th>Date/Time</th><th>Lens</th><th>To</th><th>Qty</th></tr></thead><tbody id="sessionBody"></tbody></table>
+        <div class="se-field-wrap">
+          <div style="font-family:var(--mono);font-size:9px;color:var(--text2);margin-bottom:4px">ADD <span style="opacity:.5;font-size:8px">near</span></div>
+          <div class="se-snap-wrap">
+            <input type="text" id="se-add" class="se-snap-input" placeholder="+2.00" autocomplete="off" inputmode="text">
+            <div class="se-snap-pill" id="se-add-pill"></div>
+            <div class="se-ac-list" id="se-add-ac"></div>
+          </div>
         </div>
+        <div class="se-field-wrap">
+          <div style="font-family:var(--mono);font-size:9px;color:var(--text2);margin-bottom:4px">EYE</div>
+          <select id="se-eye" style="width:100%;height:42px;border-color:rgba(0,212,255,.4)">
+            <option value="RE">RE</option>
+            <option value="LE">LE</option>
+            <option value="PAIR">PAIR</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Qty + Recipient -->
+      <div style="display:grid;grid-template-columns:100px 1fr;gap:10px;margin-bottom:18px">
+        <div>
+          <div style="font-family:var(--mono);font-size:9px;color:var(--text2);margin-bottom:4px">QTY</div>
+          <input type="number" id="se-qty" value="1" min="1" style="width:100%">
+        </div>
+        <div id="se-recipientWrap">
+          <div style="font-family:var(--mono);font-size:9px;color:var(--text2);margin-bottom:4px">RECIPIENT / NOTE</div>
+          <input type="text" id="se-recipient" placeholder="Dr. Nicho, Shop name…" style="width:100%">
+        </div>
+      </div>
+
+      <!-- Action button -->
+      <button class="btn btn-gold" id="se-actionBtn" onclick="seSubmit()" style="font-size:16px;height:50px">＋ CONFIRM STOCK IN</button>
+
+      <!-- Feedback -->
+      <div id="se-feedback" style="margin-top:12px;font-family:var(--mono);font-size:11px;display:none;padding:10px;border-radius:8px;text-align:center"></div>
+
+      <!-- Session table -->
+      <div style="margin-top:20px;border-top:1px solid rgba(180,170,240,0.25);padding-top:15px">
+        <div style="font-family:var(--mono);font-size:9px;color:var(--text2);margin-bottom:8px;letter-spacing:.5px">RECENT ENTRIES THIS SESSION</div>
+        <table class="data-table"><thead><tr><th>Date/Time</th><th>Lens</th><th>To</th><th>Qty</th></tr></thead><tbody id="sessionBody"></tbody></table>
       </div>
     </div>
   </section>
@@ -2935,7 +3006,7 @@ function bootApp(){
 // STATE
 // ══════════════════════════════════════════════
 let inv=new Map(), logs=[];
-let scanMode='IN', scanner=null, activeLens=null, bulkOut=[], scanCooldown=false;
+let scanMode='IN', activeLens=null;
 let activeType='Single', activeCoating='cr39_clear', activeGridEye='BOTH';
 const S_KEY='spec_lens_presb_v1';
 let audioCtx=null;
@@ -3820,23 +3891,348 @@ window.clearSearch=()=>{
 };
 
 // ══════════════════════════════════════════════
-// SCANNER
+// STOCK ENTRY (manual — replaces QR scanner)
 // ══════════════════════════════════════════════
+let seType='Single', seCoat='cr39_clear', seBuilt=false;
+
 window.openScan=(m)=>{
-  scanMode=m;
-  document.getElementById('scanMode').textContent='Stock '+m;
-  document.getElementById('saveZoneIn').style.display='none';
-  document.getElementById('saveZoneOut').style.display='none';
-  document.getElementById('modeToggleArea').style.display=m==='OUT'?'flex':'none';
+  scanMode = m||'IN';
   go('scanner');
-  if(!scanner){
-    scanner=new Html5Qrcode("reader");
-    const cfg={fps:15, qrbox:{width:180,height:180}, aspectRatio:1.0};
-    scanner.start({facingMode:"environment"},cfg,onDetected);
-  }
-  initAudio();
+  initSE();
+  setScanMode(scanMode);
 };
-window.setOutMode=(m)=>{scanMode=m;document.getElementById('tOut').className=m==='OUT'?'t-btn active-out':'t-btn';document.getElementById('tRet').className=m==='RETURN'?'t-btn active-ret':'t-btn';};
+
+window.setScanMode=(m)=>{
+  scanMode=m;
+  document.getElementById('scanMode').textContent = m==='IN'?'STOCK IN': m==='OUT'?'STOCK OUT':'STOCK RETURN';
+  ['IN','OUT','RETURN'].forEach(x=>{
+    const el=document.getElementById('sm'+x.charAt(0)+x.slice(1).toLowerCase());
+    if(!el) return;
+    el.className='t-btn'+(x===m?(' '+(x==='IN'?'active-out':x==='OUT'?'active-out':'active-ret')):'');
+  });
+  // Style action button
+  const btn=document.getElementById('se-actionBtn');
+  if(btn){
+    btn.style.background = m==='IN'?'rgba(0,255,140,0.18)':m==='OUT'?'var(--red)':'rgba(160,80,255,0.25)';
+    btn.style.color = m==='IN'?'var(--green)':'#fff';
+    btn.textContent = m==='IN'?'＋ CONFIRM STOCK IN': m==='OUT'?'− CONFIRM STOCK OUT':'↩ CONFIRM RETURN';
+  }
+  // Show/hide recipient
+  const rw=document.getElementById('se-recipientWrap');
+  if(rw) rw.style.display = m==='IN'?'none':'block';
+};
+
+window.setSEType=(t)=>{
+  seType=t;
+  ['Single','Bifocal','Progressive'].forEach(x=>{
+    const el=document.getElementById('se-pill-'+x);
+    if(el) el.className='type-pill'+(x===t?' tp-single':'');
+  });
+  const presb=isPresb(t);
+  document.getElementById('se-svRow').style.display    =presb?'none':'grid';
+  document.getElementById('se-presbyRow').style.display=presb?'grid':'none';
+};
+
+function initSE(){
+  if(seBuilt) return;
+  seBuilt=true;
+
+  // Coating pills
+  const cp=document.getElementById('se-coatPills');
+  cp.innerHTML='';
+  COATINGS.forEach(c=>{
+    const el=document.createElement('div');
+    el.className='coat-pill'+(c.id===seCoat?' cp-active':'');
+    el.id='se-coat-'+c.id;
+    el.textContent=c.label;
+    el.onclick=()=>{
+      seCoat=c.id;
+      COATINGS.forEach(x=>{const d=document.getElementById('se-coat-'+x.id); if(d) d.className='coat-pill'+(x.id===c.id?' cp-active':'');});
+      // refresh AC lists with new coating stock levels
+      ['se-sph','se-cyl','se-psph','se-add'].forEach(id=>{
+        const inp=document.getElementById(id); if(inp&&inp.value) seSnapInput(inp);
+      });
+    };
+    cp.appendChild(el);
+  });
+
+  // Wire up snap inputs
+  seWireSnap('se-sph',  ()=>getSPHList(),  snapSPH,  'SPH');
+  seWireSnap('se-cyl',  ()=>getCYLList(),  snapCYL,  'CYL');
+  seWireSnap('se-psph', ()=>getPSPHList(), snapPSPH, 'SPH');
+  seWireSnap('se-add',  ()=>getADDList(),  snapADD,  'ADD');
+
+  // Close dropdowns on outside click
+  document.addEventListener('click', e=>{
+    if(!e.target.closest('.se-snap-wrap')){
+      document.querySelectorAll('.se-ac-list').forEach(l=>l.classList.remove('open'));
+    }
+  });
+}
+
+// ── Value lists ──
+function getSPHList(){ return SPH_VALS.map(v=>fmtSph(v)); }
+function getCYLList(){ return CYL_VALS.map(v=>fmtCyl(v)); }
+function getPSPHList(){ return PRESB_SPH_VALS.map(v=>fmtSph(v)); }
+function getADDList(){ return ADD_VALS.map(v=>fmtAdd(v)); }
+
+// ── Snap functions — return snapped string or null ──
+function snapSPH(raw){
+  const n=parseFloat(raw.replace(',','.'));
+  if(isNaN(n)) return null;
+  const snapped=Math.round(n/0.25)*0.25;
+  const clamped=Math.max(-20,Math.min(20,snapped));
+  return fmtSph(clamped);
+}
+function snapCYL(raw){
+  const n=parseFloat(raw.replace(',','.'));
+  if(isNaN(n)) return null;
+  let snapped=Math.round(n/0.25)*0.25;
+  snapped=Math.max(-6,Math.min(0,snapped)); // CYL always 0 or negative
+  return fmtCyl(snapped);
+}
+function snapPSPH(raw){
+  const n=parseFloat(raw.replace(',','.'));
+  if(isNaN(n)) return null;
+  const snapped=Math.round(n/0.25)*0.25;
+  const clamped=Math.max(-4,Math.min(4,snapped));
+  return fmtSph(clamped);
+}
+function snapADD(raw){
+  const n=parseFloat(raw.replace(',','.').replace('+',''));
+  if(isNaN(n)) return null;
+  const snapped=Math.round(n/0.25)*0.25;
+  const clamped=Math.max(1,Math.min(3.5,snapped));
+  return fmtAdd(clamped);
+}
+
+// ── Get current stock for a snapped value ──
+function seGetStock(fieldId, snappedVal){
+  if(!snappedVal) return null;
+  const presb=isPresb(seType);
+  let key;
+  if(fieldId==='se-sph'||fieldId==='se-cyl'){
+    const sph=fieldId==='se-sph'?snappedVal:(document.getElementById('se-sph')._snapped||'0.00');
+    const cyl=fieldId==='se-cyl'?snappedVal:(document.getElementById('se-cyl')._snapped||'0.00');
+    key=makeSVKey(seType,seCoat,parseFloat(sph),parseFloat(cyl));
+  } else if(fieldId==='se-psph'||fieldId==='se-add'){
+    const sph=fieldId==='se-psph'?snappedVal:(document.getElementById('se-psph')._snapped||'0.00');
+    const add=fieldId==='se-add'?snappedVal:(document.getElementById('se-add')._snapped||'+2.00');
+    const eye=document.getElementById('se-eye')?.value||'RE';
+    key=makePresbKey(seType,seCoat,eye,parseFloat(sph),parseFloat(add.replace('+','')));
+  }
+  if(!key) return null;
+  return inv.has(key)?inv.get(key):null;
+}
+
+// ── Wire a snap input ──
+function seWireSnap(id, listFn, snapFn, label){
+  const inp=document.getElementById(id);
+  const pill=document.getElementById(id+'-pill');
+  const ac=document.getElementById(id+'-ac');
+  if(!inp) return;
+
+  inp._snapped=null;
+
+  inp.addEventListener('input', ()=>{ seSnapInput(inp, listFn, snapFn, label, pill, ac); });
+  inp.addEventListener('focus', ()=>{ if(inp.value) seSnapInput(inp, listFn, snapFn, label, pill, ac); });
+  inp.addEventListener('keydown', e=>{
+    const items=ac.querySelectorAll('.se-ac-item');
+    const hi=ac.querySelector('.highlighted');
+    let idx=[...items].indexOf(hi);
+    if(e.key==='ArrowDown'){ e.preventDefault(); idx=Math.min(idx+1,items.length-1); items.forEach((x,i)=>x.classList.toggle('highlighted',i===idx)); items[idx]?.scrollIntoView({block:'nearest'}); }
+    else if(e.key==='ArrowUp'){ e.preventDefault(); idx=Math.max(idx-1,0); items.forEach((x,i)=>x.classList.toggle('highlighted',i===idx)); items[idx]?.scrollIntoView({block:'nearest'}); }
+    else if(e.key==='Enter'||e.key==='Tab'){
+      const h=ac.querySelector('.highlighted');
+      if(h){ e.preventDefault(); seSelectAC(inp,h.dataset.val,snapFn,pill,ac,label); }
+      else if(inp._snapped){ ac.classList.remove('open'); }
+    }
+    else if(e.key==='Escape'){ ac.classList.remove('open'); }
+  });
+}
+
+function seSnapInput(inp, listFn, snapFn, label, pill, ac){
+  // Allow lazy call with just inp
+  if(!listFn){
+    const id=inp.id;
+    const map={
+      'se-sph': [getSPHList,snapSPH,'SPH'],
+      'se-cyl': [getCYLList,snapCYL,'CYL'],
+      'se-psph':[getPSPHList,snapPSPH,'SPH'],
+      'se-add': [getADDList,snapADD,'ADD'],
+    };
+    if(!map[id]) return;
+    [listFn,snapFn,label]=map[id];
+    pill=document.getElementById(id+'-pill');
+    ac=document.getElementById(id+'-ac');
+  }
+  const raw=inp.value.trim();
+  if(!raw){ pill.style.display='none'; ac.classList.remove('open'); inp._snapped=null; inp.className='se-snap-input'; return; }
+
+  const snapped=snapFn(raw);
+  inp._snapped=snapped;
+
+  // Update pill
+  if(snapped){
+    const stock=seGetStock(inp.id, snapped);
+    const stockStr = stock===null?'not tracked': stock===0?'OUT OF STOCK':`${stock} pcs`;
+    const stockClass = stock===null?'':stock===0?'low':'ok';
+    pill.textContent=`→ ${snapped}   ${stockStr}`;
+    pill.className='se-snap-pill'+(stock===0?' warn':'');
+    pill.style.display='block';
+    inp.className='se-snap-input'+(stock===0?' snap-warn':' snap-ok');
+  } else {
+    pill.textContent='✗ invalid';
+    pill.className='se-snap-pill warn';
+    pill.style.display='block';
+    inp.className='se-snap-input snap-warn';
+  }
+
+  // Build autocomplete dropdown
+  const list=listFn();
+  const rawLower=raw.toLowerCase().replace('+','');
+  // Filter: values whose string includes the typed fragment
+  const matches=list.filter(v=>{
+    const vn=v.replace('+','');
+    return vn.startsWith(rawLower)||vn.includes(rawLower)||(snapped&&v===snapped);
+  }).slice(0,12);
+
+  if(matches.length===0||( matches.length===1 && matches[0]===snapped && raw===snapped )){
+    ac.classList.remove('open'); return;
+  }
+
+  ac.innerHTML=matches.map(v=>{
+    const stock=seGetStockForVal(inp.id,v);
+    const sc=stock===null?'':stock===0?' low':' ok';
+    const st=stock===null?'':stock===0?'OUT':`${stock}`;
+    const isSnapped=v===snapped;
+    return `<div class="se-ac-item${isSnapped?' highlighted':''}" data-val="${v}">
+      <span>${v}</span>
+      <span class="ac-stock${sc}">${st}</span>
+    </div>`;
+  }).join('');
+
+  ac.querySelectorAll('.se-ac-item').forEach(item=>{
+    item.addEventListener('mousedown', e=>{ e.preventDefault(); seSelectAC(inp,item.dataset.val,snapFn,pill,ac,label); });
+  });
+  ac.classList.add('open');
+}
+
+function seGetStockForVal(fieldId, val){
+  // Get stock for a specific snapped value (used in dropdown)
+  const presb=isPresb(seType);
+  let key;
+  if(fieldId==='se-sph'){
+    const cyl=document.getElementById('se-cyl')?._snapped||'0.00';
+    key=makeSVKey(seType,seCoat,parseFloat(val),parseFloat(cyl));
+  } else if(fieldId==='se-cyl'){
+    const sph=document.getElementById('se-sph')?._snapped||'0.00';
+    key=makeSVKey(seType,seCoat,parseFloat(sph),parseFloat(val));
+  } else if(fieldId==='se-psph'){
+    const add=document.getElementById('se-add')?._snapped||'+2.00';
+    const eye=document.getElementById('se-eye')?.value||'RE';
+    key=makePresbKey(seType,seCoat,eye,parseFloat(val),parseFloat(add.replace('+','')));
+  } else if(fieldId==='se-add'){
+    const sph=document.getElementById('se-psph')?._snapped||'0.00';
+    const eye=document.getElementById('se-eye')?.value||'RE';
+    key=makePresbKey(seType,seCoat,eye,parseFloat(sph),parseFloat(val.replace('+','')));
+  }
+  if(!key) return null;
+  return inv.has(key)?inv.get(key):null;
+}
+
+function seSelectAC(inp, val, snapFn, pill, ac, label){
+  inp.value=val;
+  inp._snapped=val;
+  ac.classList.remove('open');
+  // Trigger snap update
+  seSnapInput(inp);
+  // Move focus to next logical field
+  const order=['se-sph','se-cyl','se-psph','se-add'];
+  const idx=order.indexOf(inp.id);
+  if(idx>=0&&idx<order.length-1){
+    const next=document.getElementById(order[idx+1]);
+    if(next&&next.offsetParent!==null) next.focus();
+  }
+}
+
+window.seSubmit=()=>{
+  const presb=isPresb(seType);
+  let key, rxLabel, metaLabel;
+  if(!presb){
+    const sphInp=document.getElementById('se-sph');
+    const cylInp=document.getElementById('se-cyl');
+    const sph=sphInp._snapped||snapSPH(sphInp.value);
+    const cyl=cylInp._snapped||snapCYL(cylInp.value||'0');
+    if(!sph){ seFeedback('⚠ Enter a valid SPH value (e.g. -3.00 or +1.25)','var(--amber)'); sphInp.focus(); return; }
+    const cylVal=cyl||'0.00';
+    key=makeSVKey(seType,seCoat,parseFloat(sph),parseFloat(cylVal));
+    rxLabel=`SPH ${sph} / CYL ${cylVal}`;
+    metaLabel=`${seType} · ${coatLabel(seCoat)}`;
+  } else {
+    const sphInp=document.getElementById('se-psph');
+    const addInp=document.getElementById('se-add');
+    const sph=sphInp._snapped||snapPSPH(sphInp.value);
+    const add=addInp._snapped||snapADD(addInp.value||'2');
+    const eye=document.getElementById('se-eye').value;
+    if(!sph){ seFeedback('⚠ Enter a valid SPH value','var(--amber)'); sphInp.focus(); return; }
+    if(!add){ seFeedback('⚠ Enter a valid ADD value (e.g. +2.00)','var(--amber)'); addInp.focus(); return; }
+    key=makePresbKey(seType,seCoat,eye,parseFloat(sph),parseFloat(add.replace('+','')));
+    rxLabel=`SPH ${sph}  ADD ${add} · ${eye}`;
+    metaLabel=`${seType} · ${coatLabel(seCoat)}`;
+  }
+  const qty=parseInt(document.getElementById('se-qty').value)||1;
+  const recipient=(document.getElementById('se-recipient').value||'').trim();
+  const curQty=inv.get(key)||0;
+
+  // OOS check for OUT
+  if(scanMode==='OUT' && curQty===0){
+    seFeedback(`⚠ OUT OF STOCK — ${rxLabel} has 0 units. Cannot dispense.`,'var(--red)'); return;
+  }
+  if(scanMode==='OUT' && qty>curQty){
+    seFeedback(`⚠ Only ${curQty} unit${curQty!==1?'s':''} available. Cannot dispense ${qty}.`,'var(--amber)'); return;
+  }
+
+  const eyeVal=isPresb(seType)?(document.getElementById('se-eye')?.value||'—'):'—';
+  const note=scanMode==='IN'?(recipient||'Manual Entry'):(recipient||'Manual Out');
+  if(scanMode==='IN'){
+    updateInventory(key,qty,'IN',note,seType,seCoat,eyeVal);
+  } else if(scanMode==='OUT'){
+    updateInventory(key,qty,'OUT',note,seType,seCoat,eyeVal);
+  } else {
+    updateInventory(key,qty,'IN',note+' (Ret)',seType,seCoat,eyeVal);
+  }
+
+  renderStats(); save();
+
+  const newQty=inv.get(key)||0;
+  const actionWord=scanMode==='IN'?'IN +':(scanMode==='OUT'?'OUT −':'RETURN +');
+  seFeedback(`✓ ${actionWord}${qty}  ·  ${rxLabel}  ·  ${metaLabel}  →  Stock now: ${newQty}`,'var(--green)');
+
+  // Reset inputs
+  document.getElementById('se-qty').value='1';
+  document.getElementById('se-recipient').value='';
+  // Refresh snap pills to show updated stock
+  ['se-sph','se-cyl','se-psph','se-add'].forEach(id=>{
+    const inp=document.getElementById(id);
+    if(inp&&inp.value) seSnapInput(inp);
+  });
+}
+
+function seFeedback(msg,color){
+  const el=document.getElementById('se-feedback');
+  if(!el) return;
+  el.textContent=msg;
+  el.style.color=color||'var(--green)';
+  el.style.background=color==='var(--green)'?'rgba(0,255,140,0.07)':'rgba(255,61,113,0.08)';
+  el.style.border='1px solid '+(color==='var(--green)'?'rgba(0,255,140,0.2)':'rgba(255,61,113,0.25)');
+  el.style.display='block';
+  setTimeout(()=>el.style.display='none',4000);
+}
+
+// legacy stubs (referenced elsewhere, keep empty)
+window.stopScanner=()=>{};
+window.setOutMode=(m)=>{ setScanMode(m); };
 // ══════════════════════════════════════════════
 // SMART QR / LABEL PARSER
 // Accepts human-readable lens labels and maps them
@@ -3980,151 +4376,14 @@ function parsedLabel(p, fallback){
   return s;
 }
 
-function onDetected(txt){
-  if(scanCooldown) return;
-  scanCooldown=true;
-  setTimeout(()=>{ scanCooldown=false; }, 3000);
-  playBeep(true); vibrate(true);
-  const raw = txt.trim();
-  const result = parseLensQR(raw);
 
-  if(!result.valid || !result.key){
-    // Unrecognised — flash warning, keep scanning
-    playBeep(false);
-    document.getElementById('scanPrompt').innerHTML=`
-      <div style="font-size:24px">⚠️</div>
-      <p style="font-size:11px;color:var(--red)">Could not parse label:<br><code style="font-size:10px">${raw}</code></p>
-      <p style="font-size:10px;color:var(--text2)">Try manual entry via Inventory.</p>`;
-    setTimeout(()=>{
-      document.getElementById('scanPrompt').innerHTML=`<div style="font-size:32px;opacity:.2">🔍</div><p style="font-size:11px">Ready. Beeps/Vibrates on success.</p>`;
-    },3000);
-    return;
-  }
 
-  activeLens = result.key;
 
-  if(scanMode==='IN'){
-    // Show parsed breakdown before confirming
-    const labelHTML = result.parsed
-      ? `<div style="font-family:var(--mono);font-size:11px;color:var(--text2);line-height:1.7;margin-bottom:6px">
-           <span style="color:var(--cyan)">${result.parsed.type}</span> ·
-           <span style="color:var(--accent2)">${result.parsed.coat}</span><br>
-           SPH <b>${result.parsed.sph}</b>${result.parsed.cyl!==null?' / CYL <b>'+result.parsed.cyl+'</b>':''}
-           ${result.parsed.add?' ADD <b>'+result.parsed.add+'</b>':''}
-           ${result.parsed.eye?' · <span style="color:var(--green)">' +result.parsed.eye+'</span>':''}
-         </div>`
-      : `<div style="font-family:var(--mono);font-size:11px;color:var(--text2)">Internal key</div>`;
-    document.getElementById('lensDataIn').innerHTML =
-      `<div style="font-family:var(--display);font-size:20px;color:#fff;word-break:break-all">${raw}</div>` + labelHTML;
-    document.getElementById('saveZoneIn').style.display='block';
-    document.getElementById('scanPrompt').style.display='none';
-  } else {
-    // ── Check out-of-stock BEFORE showing confirm zone ──
-    const curQty = inv.get(result.key) || 0;
-    const isTrackedZero = curQty === 0 && inv.has(result.key);
-    const isAbsoluteZero = curQty === 0;
-    if(isAbsoluteZero && scanMode === 'OUT'){
-      playBeep(false); vibrate(false);
-      const p = result.parsed;
-      // Build display strings
-      let rxLine = '—', metaLine = '—';
-      if(p){
-        if(p.cyl !== null) rxLine = `SPH ${p.sph} / CYL ${p.cyl}`;
-        else rxLine = `SPH ${p.sph}${p.add ? '  ADD ' + p.add : ''}`;
-        metaLine = `${p.type} · ${p.coat}${p.eye ? ' · ' + p.eye : ''}`;
-      }
-      document.getElementById('oosRx').textContent = rxLine;
-      document.getElementById('oosMeta').textContent = metaLine;
-      document.getElementById('oosOverlay').classList.add('open');
-      return;
-    }
-    // Show confirmation before adding to outbox
-    const labelHTML = result.parsed
-      ? `<div style="font-family:var(--mono);font-size:11px;color:var(--text2);line-height:1.7;margin-bottom:6px">
-           <span style="color:var(--cyan)">${result.parsed.type}</span> ·
-           <span style="color:var(--accent2)">${result.parsed.coat}</span><br>
-           SPH <b>${result.parsed.sph}</b>${result.parsed.cyl!==null?' / CYL <b>'+result.parsed.cyl+'</b>':''}
-           ${result.parsed.add?' ADD <b>'+result.parsed.add+'</b>':''}
-           ${result.parsed.eye?' · <span style="color:var(--green)">'+result.parsed.eye+'</span>':''}
-         </div>`
-      : `<div style="font-family:var(--mono);font-size:11px;color:var(--text2)">Internal key</div>`;
-    document.getElementById('lensDataOut').innerHTML =
-      `<div style="font-family:var(--display);font-size:20px;color:#fff;word-break:break-all">${raw}</div>` + labelHTML;
-    document.getElementById('confirmZoneOut').style.display='block';
-    document.getElementById('scanPrompt').style.display='none';
-    // If outbox already has items, keep saveZoneOut visible behind confirmation
-  }
-}
 
-// bulkOutLabels stores human-friendly display labels for each scanned item
-const bulkOutLabels = [];
-function updateBulkUI(lastLabel){
-  // Keep label list in sync with bulkOut
-  while(bulkOutLabels.length < bulkOut.length){ bulkOutLabels.push(lastLabel||bulkOut[bulkOutLabels.length]); }
-  while(bulkOutLabels.length > bulkOut.length){ bulkOutLabels.pop(); }
-  document.getElementById('batchLabel').textContent=`OUTBOX (${bulkOut.length})`;
-  document.getElementById('outItemsList').innerHTML=bulkOut.map((item,idx)=>{
-    const disp = bulkOutLabels[idx]||item;
-    return `<div class="out-item"><span style="font-size:11px">${disp}</span><button class="btn-ghost" style="width:auto;padding:4px 8px;font-size:10px;color:var(--red)" onclick="removeItem(${idx})">DEL</button></div>`;
-  }).join('');
-}
-window.confirmOutItem=()=>{
-  const result = parseLensQR(activeLens);
-  const label = parsedLabel(result.parsed, activeLens);
-  bulkOut.push(activeLens);
-  bulkOutLabels.push(label);
-  updateBulkUI();
-  document.getElementById('confirmZoneOut').style.display='none';
-  document.getElementById('saveZoneOut').style.display='block';
-};
-window.discardOutItem=()=>{
-  document.getElementById('confirmZoneOut').style.display='none';
-  if(bulkOut.length) document.getElementById('saveZoneOut').style.display='block';
-  else document.getElementById('scanPrompt').style.display='block';
-};
-window.removeItem=(idx)=>{
-  bulkOut.splice(idx,1);
-  bulkOutLabels.splice(idx,1);
-  updateBulkUI();
-  if(!bulkOut.length){document.getElementById('saveZoneOut').style.display='none';document.getElementById('scanPrompt').style.display='block';}
-};
-window.clearBulkList=()=>{
-  bulkOut=[];
-  bulkOutLabels.length=0;
-  updateBulkUI();
-  document.getElementById('saveZoneOut').style.display='none';
-  document.getElementById('scanPrompt').style.display='block';
-};
-window.saveStockIn=()=>{
-  const qty=parseInt(document.getElementById('qtyInputIn').value)||1;
-  updateInventory(activeLens,qty,'IN','Scan In');
-  renderStats();
-  document.getElementById('saveZoneIn').style.display='none';
-  document.getElementById('scanPrompt').style.display='block';
-  document.getElementById('scanPrompt').innerHTML=`<div style="font-size:32px;opacity:.2">🔍</div><p style="font-size:11px">Ready. Beeps/Vibrates on success.</p>`;
-};
-window.saveStockOutBulk=()=>{
-  const r=document.getElementById('recipientInput').value||'Unknown';
-  const counts=bulkOut.reduce((a,l)=>{a[l]=(a[l]||0)+1;return a;},{});
-  Object.keys(counts).forEach(lens=>{
-    if(scanMode==='RETURN') updateInventory(lens,counts[lens],'IN',r+' (Ret)');
-    else updateInventory(lens,counts[lens],'OUT',r);
-  });
-  bulkOut=[];
-  bulkOutLabels.length=0;
-  document.getElementById('recipientInput').value='';
-  document.getElementById('saveZoneOut').style.display='none';
-  document.getElementById('scanPrompt').style.display='block';
-  renderStats();
-  save();
-};
-window.stopScanner=()=>{if(scanner){scanner.stop().then(()=>scanner=null);}};
 
 // ── OOS MODAL ──
 window.closeOosModal = () => {
   document.getElementById('oosOverlay').classList.remove('open');
-  // Reset cooldown so next scan fires immediately
-  scanCooldown = false;
 };
 
 window.oosRequestTransfer = () => {
@@ -4397,18 +4656,7 @@ window.confirmResetData=()=>{
   } else { alert('Reset cancelled. Nothing was changed.'); }
 };
 window.resetData=window.confirmResetData;
-// ── DISMISS SCAN POPUPS ──
-window.dismissScanIn=()=>{
-  document.getElementById('saveZoneIn').style.display='none';
-  document.getElementById('scanPrompt').style.display='block';
-  activeLens=null;
-};
-window.dismissConfirmOut=()=>{
-  document.getElementById('confirmZoneOut').style.display='none';
-  if(bulkOut.length) document.getElementById('saveZoneOut').style.display='block';
-  else document.getElementById('scanPrompt').style.display='block';
-  activeLens=null;
-};
+
 
 // ══════════════════════════════════════════════════════════════════
 // FIREBASE SYNC ENGINE
