@@ -568,6 +568,33 @@ input.compact{margin-bottom:0;padding:10px;font-size:13px}
       <button class="btn btn-gold" onclick="syncToCloud()" style="margin-bottom:10px;grid-column:1/-1;font-size:16px;padding:16px;display:flex;align-items:center;justify-content:center;gap:10px"><span style="font-size:22px">🔄</span> SYNC CLOUD</button>
       <button class="panel" id="adminMenuBtn" onclick="go('admin')" style="border-left:4px solid var(--purple);cursor:pointer;text-align:left;display:none"><span style="font-size:32px">🔐</span><div style="font-family:var(--display);font-size:24px;color:var(--purple)">ADMIN PANEL</div></button>
     </div>
+
+    <!-- PDF REPORTS QUICK ACCESS -->
+    <div style="margin-top:4px;background:rgba(255,255,255,.025);border:1px solid var(--border2);border-radius:14px;padding:14px">
+      <div style="font-family:var(--mono);font-size:9px;color:var(--text2);letter-spacing:1px;margin-bottom:10px">📄 DOWNLOAD REPORTS</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <button onclick="downloadOOSPDF()" style="display:flex;flex-direction:column;align-items:flex-start;gap:3px;background:rgba(255,61,113,.08);border:1px solid rgba(255,61,113,.3);border-radius:10px;padding:12px;cursor:pointer;transition:.15s" onmouseover="this.style.background='rgba(255,61,113,.15)'" onmouseout="this.style.background='rgba(255,61,113,.08)'">
+          <span style="font-size:22px">🚫</span>
+          <span style="font-family:var(--display);font-size:13px;color:var(--red);line-height:1.2">OUT OF STOCK</span>
+          <span style="font-family:var(--mono);font-size:8px;color:var(--text2)">+ Low stock report</span>
+        </button>
+        <button onclick="downloadStockPDF()" style="display:flex;flex-direction:column;align-items:flex-start;gap:3px;background:rgba(0,212,255,.06);border:1px solid rgba(0,212,255,.25);border-radius:10px;padding:12px;cursor:pointer;transition:.15s" onmouseover="this.style.background='rgba(0,212,255,.12)'" onmouseout="this.style.background='rgba(0,212,255,.06)'">
+          <span style="font-size:22px">📦</span>
+          <span style="font-family:var(--display);font-size:13px;color:var(--cyan);line-height:1.2">FULL INVENTORY</span>
+          <span style="font-family:var(--mono);font-size:8px;color:var(--text2)">All stock by type</span>
+        </button>
+        <button onclick="go('history');setTimeout(()=>exportHistoryPDF(),300)" style="display:flex;flex-direction:column;align-items:flex-start;gap:3px;background:rgba(110,168,254,.06);border:1px solid rgba(110,168,254,.22);border-radius:10px;padding:12px;cursor:pointer;transition:.15s" onmouseover="this.style.background='rgba(110,168,254,.12)'" onmouseout="this.style.background='rgba(110,168,254,.06)'">
+          <span style="font-size:22px">📋</span>
+          <span style="font-family:var(--display);font-size:13px;color:var(--accent2);line-height:1.2">TRANSACTION LOG</span>
+          <span style="font-family:var(--mono);font-size:8px;color:var(--text2)">History PDF</span>
+        </button>
+        <button onclick="downloadCustomerPDF()" style="display:flex;flex-direction:column;align-items:flex-start;gap:3px;background:rgba(160,80,255,.06);border:1px solid rgba(160,80,255,.22);border-radius:10px;padding:12px;cursor:pointer;transition:.15s" onmouseover="this.style.background='rgba(160,80,255,.12)'" onmouseout="this.style.background='rgba(160,80,255,.06)'">
+          <span style="font-size:22px">👤</span>
+          <span style="font-family:var(--display);font-size:13px;color:var(--accent2);line-height:1.2">CUSTOMER REPORT</span>
+          <span style="font-family:var(--mono);font-size:8px;color:var(--text2)">All recipients summary</span>
+        </button>
+      </div>
+    </div>
   </section>
 
   <!-- ══════════ ADMIN DASHBOARD ══════════ -->
@@ -925,6 +952,22 @@ input.compact{margin-bottom:0;padding:10px;font-size:13px}
       <!-- Action button -->
       <button class="btn btn-gold" id="se-actionBtn" onclick="seSubmit()" style="font-size:16px;height:50px">＋ CONFIRM STOCK IN</button>
 
+      <!-- OUT basket (only visible in OUT/RETURN mode) -->
+      <div id="se-basket" style="display:none;margin-top:16px;border:1px solid rgba(255,61,113,0.25);border-radius:12px;padding:14px;background:rgba(255,61,113,0.04)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <div style="font-family:var(--display);font-size:14px;color:var(--red)">🛒 BASKET <span id="se-basket-count" style="font-family:var(--mono);font-size:11px;color:var(--text2)">(0 items)</span></div>
+          <button onclick="seBasketClear()" style="background:none;border:none;color:var(--text2);font-size:11px;font-family:var(--mono);cursor:pointer">CLEAR ALL</button>
+        </div>
+        <div id="se-basket-list" style="margin-bottom:10px;max-height:160px;overflow-y:auto"></div>
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">
+          <input type="text" id="se-basket-recipient" placeholder="Recipient — Dr. Nicho, Shop name…" style="flex:1">
+        </div>
+        <button class="btn" id="se-basket-commit" onclick="seBasketCommit()" style="background:var(--red);color:#fff;font-size:14px;height:44px;width:100%">✓ DISPENSE ALL TO RECIPIENT</button>
+      </div>
+
+      <!-- ADD TO BASKET button (replaces confirm in OUT mode) -->
+      <button id="se-add-basket-btn" onclick="seAddToBasket()" style="display:none;margin-top:8px;width:100%;height:40px;background:rgba(255,61,113,0.10);border:1px solid rgba(255,61,113,0.35);color:var(--red);font-family:var(--display);font-size:13px;letter-spacing:1px;border-radius:10px;cursor:pointer">＋ ADD ANOTHER LENS TO BASKET</button>
+
       <!-- Feedback -->
       <div id="se-feedback" style="margin-top:12px;font-family:var(--mono);font-size:11px;display:none;padding:10px;border-radius:8px;text-align:center"></div>
 
@@ -941,7 +984,11 @@ input.compact{margin-bottom:0;padding:10px;font-size:13px}
     <div class="panel">
       <div class="panel-title">
         <span id="matrixTitle">SPH × CYL GRID</span>
-        <button class="btn btn-ghost btn-sm" onclick="go('menu')">← BACK</button>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+          <button onclick="downloadOOSPDF()" class="btn btn-ghost btn-sm" style="color:var(--red);border-color:rgba(255,61,113,.3);font-size:9px">🚫 OOS PDF</button>
+          <button onclick="downloadStockPDF()" class="btn btn-ghost btn-sm" style="color:var(--cyan);border-color:rgba(0,212,255,.3);font-size:9px">📦 Stock PDF</button>
+          <button class="btn btn-ghost btn-sm" onclick="go('menu')">← BACK</button>
+        </div>
       </div>
 
       <!-- LEGEND -->
@@ -1010,13 +1057,27 @@ input.compact{margin-bottom:0;padding:10px;font-size:13px}
           MANUAL STOCK ENTRY
           <span style="font-family:var(--mono);font-size:9px;color:var(--text2);font-weight:400;margin-left:8px">SPH × CYL · uses selected type &amp; coating</span>
         </div>
-        <div class="manual-row">
-          <div class="manual-field"><div class="field-label">SPH</div><select id="mSph"></select></div>
-          <div class="manual-field"><div class="field-label">CYL</div><select id="mCyl"></select></div>
-          <div class="manual-field" style="max-width:90px"><div class="field-label">QTY</div><input class="compact" type="number" id="mQty" value="1" min="1"></div>
-          <div style="display:flex;gap:6px;padding-bottom:1px">
+        <div class="manual-row" style="flex-wrap:wrap;gap:8px">
+          <div class="manual-field se-field-wrap" style="min-width:110px">
+            <div class="field-label">SPH</div>
+            <div class="se-snap-wrap">
+              <input type="text" id="mSph" class="se-snap-input compact" placeholder="-3.00" autocomplete="off" inputmode="text">
+              <div class="se-snap-pill" id="mSph-pill"></div>
+              <div class="se-ac-list" id="mSph-ac"></div>
+            </div>
+          </div>
+          <div class="manual-field se-field-wrap" style="min-width:110px">
+            <div class="field-label">CYL</div>
+            <div class="se-snap-wrap">
+              <input type="text" id="mCyl" class="se-snap-input compact" placeholder="0.00" autocomplete="off" inputmode="text">
+              <div class="se-snap-pill" id="mCyl-pill"></div>
+              <div class="se-ac-list" id="mCyl-ac"></div>
+            </div>
+          </div>
+          <div class="manual-field" style="max-width:80px"><div class="field-label">QTY</div><input class="compact" type="number" id="mQty" value="1" min="1"></div>
+          <div style="display:flex;gap:6px;align-items:flex-end;padding-bottom:1px">
             <button class="btn btn-sm" style="background:rgba(0,255,140,0.12);color:var(--green);border:1px solid rgba(0,255,140,0.30)" onclick="manualStockIn()">＋ IN</button>
-            <button class="btn btn-sm" style="background:var(--red);color:#fff"   onclick="manualStockOut()">− OUT</button>
+            <button class="btn btn-sm" style="background:var(--red);color:#fff" onclick="manualStockOut()">− OUT</button>
           </div>
         </div>
       </div>
@@ -1027,22 +1088,33 @@ input.compact{margin-bottom:0;padding:10px;font-size:13px}
           MANUAL STOCK ENTRY
           <span style="font-family:var(--mono);font-size:9px;color:var(--text2);font-weight:400;margin-left:8px">SPH × ADD · select eye side below</span>
         </div>
-        <div class="manual-row">
-          <div class="manual-field"><div class="field-label">SPH (Distance)</div><select id="pSph"></select></div>
-          <div class="manual-field"><div class="field-label">ADD (Near)</div><select id="pAdd"></select></div>
+        <div class="manual-row" style="flex-wrap:wrap;gap:8px">
+          <div class="manual-field se-field-wrap" style="min-width:110px">
+            <div class="field-label">SPH (Distance)</div>
+            <div class="se-snap-wrap">
+              <input type="text" id="pSph" class="se-snap-input compact" placeholder="-1.00" autocomplete="off" inputmode="text">
+              <div class="se-snap-pill" id="pSph-pill"></div>
+              <div class="se-ac-list" id="pSph-ac"></div>
+            </div>
+          </div>
+          <div class="manual-field se-field-wrap" style="min-width:110px">
+            <div class="field-label">ADD (Near)</div>
+            <div class="se-snap-wrap">
+              <input type="text" id="pAdd" class="se-snap-input compact" placeholder="+2.00" autocomplete="off" inputmode="text">
+              <div class="se-snap-pill" id="pAdd-pill"></div>
+              <div class="se-ac-list" id="pAdd-ac"></div>
+            </div>
+          </div>
           <div class="manual-field" style="max-width:80px"><div class="field-label">QTY</div><input class="compact" type="number" id="pQty" value="1" min="1"></div>
-          <!-- inline eye selector -->
           <div class="manual-field" style="min-width:70px;max-width:90px">
             <div class="field-label">Eye</div>
-            <select id="pEye" style="border-color:rgba(0,212,255,.4)">
-              <option value="RE">RE</option>
-              <option value="LE">LE</option>
-              <option value="PAIR">PAIR</option>
+            <select id="pEye" style="border-color:rgba(0,212,255,.4);height:36px">
+              <option value="RE">RE</option><option value="LE">LE</option><option value="PAIR">PAIR</option>
             </select>
           </div>
-          <div style="display:flex;gap:6px;padding-bottom:1px">
+          <div style="display:flex;gap:6px;align-items:flex-end;padding-bottom:1px">
             <button class="btn btn-sm" style="background:rgba(0,255,140,0.12);color:var(--green);border:1px solid rgba(0,255,140,0.30)" onclick="presbyStockIn()">＋ IN</button>
-            <button class="btn btn-sm" style="background:var(--red);color:#fff"   onclick="presbyStockOut()">− OUT</button>
+            <button class="btn btn-sm" style="background:var(--red);color:#fff" onclick="presbyStockOut()">− OUT</button>
           </div>
         </div>
       </div>
@@ -1055,18 +1127,22 @@ input.compact{margin-bottom:0;padding:10px;font-size:13px}
         </div>
 
         <!-- SV search row -->
-        <div id="searchRowSV" class="search-field-row">
-          <div class="search-field">
+        <div id="searchRowSV" class="search-field-row" style="flex-wrap:wrap;gap:8px">
+          <div class="search-field se-field-wrap">
             <div class="field-label">SPH</div>
-            <select id="sSph">
-              <option value="">— Any —</option>
-            </select>
+            <div class="se-snap-wrap">
+              <input type="text" id="sSph" class="se-snap-input" placeholder="any" autocomplete="off" inputmode="text">
+              <div class="se-snap-pill" id="sSph-pill"></div>
+              <div class="se-ac-list" id="sSph-ac"></div>
+            </div>
           </div>
-          <div class="search-field">
+          <div class="search-field se-field-wrap">
             <div class="field-label">CYL</div>
-            <select id="sCyl">
-              <option value="">— Any —</option>
-            </select>
+            <div class="se-snap-wrap">
+              <input type="text" id="sCyl" class="se-snap-input" placeholder="any" autocomplete="off" inputmode="text">
+              <div class="se-snap-pill" id="sCyl-pill"></div>
+              <div class="se-ac-list" id="sCyl-ac"></div>
+            </div>
           </div>
           <div class="search-field-btn">
             <button class="btn btn-gold btn-sm search-go" onclick="doSearch()">SEARCH</button>
@@ -1076,19 +1152,22 @@ input.compact{margin-bottom:0;padding:10px;font-size:13px}
 
         <!-- Presb search row -->
         <div id="searchRowPresb" class="search-field-row" style="display:none;flex-wrap:wrap;gap:10px">
-          <div class="search-field">
+          <div class="search-field se-field-wrap">
             <div class="field-label">SPH (Distance)</div>
-            <select id="psSph">
-              <option value="">— Any —</option>
-            </select>
+            <div class="se-snap-wrap">
+              <input type="text" id="psSph" class="se-snap-input" placeholder="any" autocomplete="off" inputmode="text">
+              <div class="se-snap-pill" id="psSph-pill"></div>
+              <div class="se-ac-list" id="psSph-ac"></div>
+            </div>
           </div>
-          <div class="search-field">
+          <div class="search-field se-field-wrap">
             <div class="field-label">ADD (Near)</div>
-            <select id="psAdd">
-              <option value="">— Any —</option>
-            </select>
+            <div class="se-snap-wrap">
+              <input type="text" id="psAdd" class="se-snap-input" placeholder="any" autocomplete="off" inputmode="text">
+              <div class="se-snap-pill" id="psAdd-pill"></div>
+              <div class="se-ac-list" id="psAdd-ac"></div>
+            </div>
           </div>
-          <!-- Eye filter inside search -->
           <div class="search-field" style="min-width:110px;max-width:140px">
             <div class="field-label">Eye Side</div>
             <select id="psEye" style="border-color:rgba(0,212,255,.35)">
@@ -1183,11 +1262,22 @@ input.compact{margin-bottom:0;padding:10px;font-size:13px}
         <span>MASTER LOGS</span>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
           <span id="histSyncStatus"></span>
-          <button class="btn btn-ghost btn-sm" onclick="exportHistoryPDF()" style="color:var(--accent2);border-color:rgba(110,168,254,.3)">⬇ PDF</button>
+          <button class="btn btn-ghost btn-sm" onclick="exportHistoryPDF()" style="color:var(--accent2);border-color:rgba(110,168,254,.3)">📋 History PDF</button>
+          <button class="btn btn-ghost btn-sm" onclick="downloadOOSPDF()" style="color:var(--red);border-color:rgba(255,61,113,.3)">🚫 OOS PDF</button>
+          <button class="btn btn-ghost btn-sm" onclick="downloadStockPDF()" style="color:var(--cyan);border-color:rgba(0,212,255,.3)">📦 Stock PDF</button>
           <button class="btn btn-ghost btn-sm" onclick="exportBackup()" style="color:var(--green);border-color:rgba(48,209,88,.3)">💾 Backup</button>
           <button class="btn btn-ghost btn-sm" onclick="go('menu')">← BACK</button>
         </div>
       </div>
+
+      <!-- Tab switcher -->
+      <div style="display:flex;gap:6px;margin-bottom:16px;border-bottom:1px solid var(--border2);padding-bottom:12px">
+        <button id="htab-logs" onclick="setHistTab('logs')" class="btn btn-sm" style="background:rgba(0,240,255,.12);color:var(--cyan);border:1px solid rgba(0,240,255,.3)">📋 TRANSACTION LOG</button>
+        <button id="htab-ledger" onclick="setHistTab('ledger')" class="btn btn-sm" style="background:var(--glass);color:var(--text2);border:1px solid var(--border)">👤 CUSTOMER LEDGER</button>
+      </div>
+
+      <!-- ── LOGS PANEL ── -->
+      <div id="hist-panel-logs">
 
       <!-- FILTER BAR -->
       <div style="background:rgba(255,255,255,.025);border:1px solid var(--border2);border-radius:12px;padding:14px;margin-bottom:14px">
@@ -1263,6 +1353,32 @@ input.compact{margin-bottom:0;padding:10px;font-size:13px}
         <div style="font-family:var(--mono);font-size:9px;color:var(--text3);margin-top:8px">
           ⚠ Clearing history also wipes all stock counts — always backup first. History cannot be partially deleted.
         </div>
+      </div>
+      </div><!-- /hist-panel-logs -->
+
+      <!-- ── CUSTOMER LEDGER PANEL ── -->
+      <div id="hist-panel-ledger" style="display:none">
+        <div style="margin-bottom:16px">
+          <div style="font-family:var(--display);font-size:15px;color:var(--accent2);margin-bottom:10px">👤 CUSTOMER LEDGER</div>
+          <div style="font-family:var(--mono);font-size:10px;color:var(--text2);margin-bottom:10px">Search by recipient name to see all lenses dispensed to that person across all visits.</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+            <div style="flex:1;min-width:180px">
+              <div style="font-family:var(--mono);font-size:9px;color:var(--text2);margin-bottom:4px">RECIPIENT NAME</div>
+              <div style="position:relative">
+                <input type="text" id="ledgerSearch" placeholder="Dr. Nicho, Shop name…" oninput="ledgerAutoSuggest()" style="width:100%;padding-right:10px">
+                <div id="ledgerSuggest" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:100;background:var(--bg2);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 20px rgba(0,0,0,.4);max-height:160px;overflow-y:auto"></div>
+              </div>
+            </div>
+            <button class="btn btn-gold btn-sm" onclick="renderLedger()" style="height:38px;padding:0 16px">LOOKUP</button>
+            <button class="btn btn-ghost btn-sm" onclick="clearLedger()" style="height:38px">CLEAR</button>
+          </div>
+        </div>
+
+        <!-- All recipients summary (shown when no search) -->
+        <div id="ledger-all-recipients" style="margin-bottom:16px"></div>
+
+        <!-- Individual customer result -->
+        <div id="ledger-result"></div>
       </div>
     </div>
   </section>
@@ -2625,6 +2741,257 @@ window.downloadTransferPDF = () => {
   openPrintWindow('Stock Transfer History', body);
 };
 
+// ══════════════════════════════════════════════
+// STOCK INVENTORY PDF
+// ══════════════════════════════════════════════
+window.downloadStockPDF = () => {
+  const bid = activeBranchId();
+  const b = branchInfo(bid) || {label: bid, icon: '📍'};
+  const now = new Date();
+
+  // Build grouped inventory data
+  const grouped = {}; // {type: {coat: [{sph,cyl/add,eye,qty}]}}
+  let totalUnits=0, totalSKUs=0, oosCount=0, lowCount=0;
+
+  inv.forEach((qty, key) => {
+    const p = key.split('|');
+    const type=p[0], coat=p[1];
+    if(!grouped[type]) grouped[type]={};
+    if(!grouped[type][coat]) grouped[type][coat]=[];
+    grouped[type][coat].push({key, qty, parts:p});
+    totalSKUs++;
+    totalUnits+=qty;
+    if(qty===0) oosCount++;
+    else if(qty>0 && qty<=3) lowCount++;
+  });
+
+  // Summary stats
+  const summaryHtml = `
+    <div class="stat-grid" style="grid-template-columns:repeat(4,1fr)">
+      <div class="stat-box"><div class="stat-num" style="color:#1a1a2e">${totalSKUs}</div><div class="stat-lbl">Total SKUs</div></div>
+      <div class="stat-box"><div class="stat-num" style="color:#0055cc">${totalUnits}</div><div class="stat-lbl">Total Units</div></div>
+      <div class="stat-box"><div class="stat-num" style="color:#cc4400">${lowCount}</div><div class="stat-lbl">Low Stock (1-3)</div></div>
+      <div class="stat-box"><div class="stat-num" style="color:#cc0000">${oosCount}</div><div class="stat-lbl">Out of Stock</div></div>
+    </div>`;
+
+  // OUT OF STOCK section first
+  const oosList = [];
+  inv.forEach((qty, key) => {
+    if(qty===0 && inv.has(key)) {
+      const p=key.split('|');
+      const type=p[0], coat=coatLabel(p[1]);
+      const presb=isPresb(type);
+      const rx = presb&&p.length>=5 ? `SPH ${p[3]}  ADD ${p[4]}  ·  ${p[2]}` : `SPH ${p[2]} / CYL ${p[3]}`;
+      oosList.push(`<tr><td><span class="badge badge-red">OUT</span></td><td><strong>${type}</strong></td><td>${coat}</td><td style="font-family:monospace">${rx}</td></tr>`);
+    }
+  });
+
+  const oosHtml = oosList.length ? `
+    <h2 style="color:#cc0000">🚫 OUT OF STOCK (${oosList.length} SKUs)</h2>
+    <table>
+      <thead><tr><th>Status</th><th>Type</th><th>Coating</th><th>Prescription</th></tr></thead>
+      <tbody>${oosList.join('')}</tbody>
+    </table>` : '<p style="color:#007700;margin-bottom:16px">✓ No out-of-stock items.</p>';
+
+  // Full stock by type/coating
+  let stockHtml = '<h2>📦 FULL STOCK BY TYPE &amp; COATING</h2>';
+  const LENS_TYPES_ORDER = ['Single','Bifocal','Progressive'];
+  LENS_TYPES_ORDER.forEach(type => {
+    if(!grouped[type]) return;
+    const typeTotal = Object.values(grouped[type]).flat().reduce((s,r)=>s+r.qty,0);
+    stockHtml += `<h3>${type} — ${typeTotal} units total</h3>`;
+    Object.entries(grouped[type]).forEach(([coat, rows]) => {
+      const cTotal = rows.reduce((s,r)=>s+r.qty,0);
+      const sorted = [...rows].sort((a,b)=>{
+        const ap=a.parts, bp=b.parts;
+        return parseFloat(ap[2]||0)-parseFloat(bp[2]||0);
+      });
+      stockHtml += `<div class="section">
+        <div class="section-title">${coatLabel(coat)} — ${cTotal} units</div>
+        <table>
+          <thead><tr><th>Prescription</th><th style="text-align:center">Qty</th><th>Status</th></tr></thead>
+          <tbody>${sorted.map(r=>{
+            const p=r.parts, presb=isPresb(p[0]);
+            const rx = presb&&p.length>=5 ? `SPH ${p[3]}  ADD ${p[4]}  ·  ${p[2]}` : `SPH ${p[2]} / CYL ${p[3]}`;
+            const statusClass = r.qty===0?'badge badge-red':r.qty<=3?'badge badge-blue':'badge badge-green';
+            const statusTxt = r.qty===0?'OUT':r.qty<=3?'LOW':'OK';
+            return `<tr${r.qty===0?' style="opacity:.6"':''}>
+              <td style="font-family:monospace">${rx}</td>
+              <td style="text-align:center;font-weight:700;font-size:14px;color:${r.qty===0?'#cc0000':r.qty<=3?'#cc6600':'#007700'}">${r.qty}</td>
+              <td><span class="${statusClass}">${statusTxt}</span></td>
+            </tr>`;
+          }).join('')}</tbody>
+        </table>
+      </div>`;
+    });
+  });
+
+  const body = `
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
+      <div>
+        <div style="font-size:11px;color:#888">Branch: <strong>${b.icon} ${b.label}</strong></div>
+      </div>
+    </div>
+    ${summaryHtml}
+    ${oosHtml}
+    ${stockHtml}`;
+
+  openPrintWindow(`${b.label} — Stock Inventory Report`, body);
+};
+
+// ══════════════════════════════════════════════
+// OUT OF STOCK ONLY PDF
+// ══════════════════════════════════════════════
+window.downloadOOSPDF = () => {
+  const bid = activeBranchId();
+  const b = branchInfo(bid) || {label: bid, icon: '📍'};
+
+  const oosList = [], lowList = [];
+  inv.forEach((qty, key) => {
+    const p=key.split('|');
+    const type=p[0], coat=coatLabel(p[1]);
+    const presb=isPresb(type);
+    const rx = presb&&p.length>=5 ? `SPH ${p[3]}  ADD ${p[4]}  ·  ${p[2]}` : `SPH ${p[2]} / CYL ${p[3]}`;
+    if(qty===0 && inv.has(key)){
+      oosList.push({type,coat,rx,qty:0});
+    } else if(qty>0 && qty<=3){
+      lowList.push({type,coat,rx,qty});
+    }
+  });
+
+  const makeTable = (items, title, color) => {
+    if(!items.length) return `<p style="color:#888;font-style:italic;margin-bottom:12px">No items in this category.</p>`;
+    return `<table>
+      <thead><tr><th>Type</th><th>Coating</th><th>Prescription</th><th style="text-align:center">Qty</th></tr></thead>
+      <tbody>${items.sort((a,b)=>a.type.localeCompare(b.type)||a.coat.localeCompare(b.coat)).map(item=>`
+        <tr>
+          <td><strong>${item.type}</strong></td>
+          <td style="font-size:10px">${item.coat}</td>
+          <td style="font-family:monospace">${item.rx}</td>
+          <td style="text-align:center;font-weight:700;color:${color}">${item.qty}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
+  };
+
+  const body = `
+    <div style="margin-bottom:12px;font-size:11px;color:#888">Branch: <strong>${b.icon} ${b.label}</strong> &nbsp;·&nbsp; Use this report to reorder stock.</div>
+    <div class="stat-grid">
+      <div class="stat-box"><div class="stat-num" style="color:#cc0000">${oosList.length}</div><div class="stat-lbl">Out of Stock SKUs</div></div>
+      <div class="stat-box"><div class="stat-num" style="color:#cc6600">${lowList.length}</div><div class="stat-lbl">Low Stock (1-3 pcs)</div></div>
+      <div class="stat-box"><div class="stat-num" style="color:#1a1a2e">${oosList.length+lowList.length}</div><div class="stat-lbl">Total Needs Reorder</div></div>
+    </div>
+    <h2 style="color:#cc0000">🚫 OUT OF STOCK (${oosList.length})</h2>
+    ${makeTable(oosList,'Out of Stock','#cc0000')}
+    <h2 style="color:#cc6600;margin-top:10px">⚠ LOW STOCK — 1 to 3 pcs (${lowList.length})</h2>
+    ${makeTable(lowList,'Low Stock','#cc6600')}`;
+
+  openPrintWindow(`${b.label} — Out of Stock & Low Stock Report`, body);
+};
+
+// ══════════════════════════════════════════════
+// CUSTOMER SUMMARY PDF
+// ══════════════════════════════════════════════
+window.downloadCustomerPDF = () => {
+  const bid = activeBranchId();
+  const b = branchInfo(bid) || {label: bid, icon: '📍'};
+
+  // Gather all OUT logs
+  let source = [...logs];
+  try {
+    const arch = JSON.parse(localStorage.getItem(branchStorageKey(bid)+'_arch')||'[]');
+    if(arch.length) source = [...source, ...arch];
+  } catch(e){}
+
+  const outLogs = source.filter(l => l.f==='OUT' && l.r && l.r.trim() && l.r!=='Manual Out');
+
+  if(!outLogs.length) {
+    alert('No dispensing records found yet. Dispense some lenses first.');
+    return;
+  }
+
+  // Group by recipient
+  const byRec = {};
+  outLogs.forEach(l => {
+    const rec = (l.r||'').replace(/\s*\(Ret\)/,'').trim();
+    if(!rec) return;
+    if(!byRec[rec]) byRec[rec] = {name:rec, total:0, visits:{}, logs:[]};
+    byRec[rec].total += l.q;
+    const dk = l.d||'Unknown';
+    if(!byRec[rec].visits[dk]) byRec[rec].visits[dk] = [];
+    byRec[rec].visits[dk].push(l);
+    byRec[rec].logs.push(l);
+  });
+
+  const recs = Object.values(byRec).sort((a,b) => b.total - a.total);
+
+  // Summary table
+  const summaryRows = recs.map((r,i) => {
+    const visits = Object.keys(r.visits).length;
+    const lastDate = Object.keys(r.visits).sort().at(-1) || '—';
+    const firstDate = Object.keys(r.visits).sort()[0] || '—';
+    // Top lenses
+    const lensCount = {};
+    r.logs.forEach(l => {
+      const p = l.l.split('|');
+      const presb = isPresb(p[0]);
+      const rx = presb&&p.length>=5 ? `${p[0]} SPH${p[3]} ADD${p[4]} ${p[2]}` : `${p[0]} SPH${p[2]}/${p[3]}`;
+      lensCount[rx] = (lensCount[rx]||0) + l.q;
+    });
+    const topLens = Object.entries(lensCount).sort((a,b)=>b[1]-a[1]).slice(0,2).map(([rx,q])=>`${rx} (×${q})`).join(', ');
+    return `<tr>
+      <td style="font-weight:700">${r.name}</td>
+      <td style="text-align:center;font-weight:700;color:#cc0000">${r.total}</td>
+      <td style="text-align:center">${visits}</td>
+      <td style="font-size:10px">${firstDate}</td>
+      <td style="font-size:10px">${lastDate}</td>
+      <td style="font-size:9px;color:#555">${topLens}</td>
+    </tr>`;
+  }).join('');
+
+  // Detailed section per customer
+  const detailSections = recs.map(r => {
+    const visitBlocks = Object.entries(r.visits).sort((a,b)=>b[0].localeCompare(a[0])).map(([date, visitLogs]) => {
+      const visitTotal = visitLogs.reduce((s,l)=>s+l.q,0);
+      const rows = visitLogs.map(l => {
+        const p=l.l.split('|');
+        const presb=isPresb(p[0]);
+        const rx = presb&&p.length>=5 ? `SPH ${p[3]}  ADD ${p[4]}  · ${p[2]}` : `SPH ${p[2]} / CYL ${p[3]}`;
+        return `<tr><td>${l.t||''}</td><td>${l.tp||'-'}</td><td style="font-family:monospace">${rx}</td><td>${l.ct||'-'}</td><td style="text-align:center;font-weight:700;color:#cc0000">-${l.q}</td></tr>`;
+      }).join('');
+      return `<div style="margin-bottom:8px;padding-left:12px;border-left:3px solid #ddd">
+        <div style="font-size:10px;font-weight:700;color:#444;margin-bottom:4px">📅 ${date} — ${visitTotal} pcs</div>
+        <table style="font-size:10px;margin:0">
+          <thead><tr><th>Time</th><th>Type</th><th>Rx</th><th>Coating</th><th>Qty</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+    }).join('');
+
+    return `<div class="section">
+      <div class="section-title" style="background:#f0f0f8">👤 ${r.name} — ${r.total} pcs total · ${Object.keys(r.visits).length} visits</div>
+      ${visitBlocks}
+    </div>`;
+  }).join('');
+
+  const body = `
+    <div style="font-size:11px;color:#888;margin-bottom:12px">Branch: <strong>${b.icon} ${b.label}</strong> &nbsp;·&nbsp; All dispensing records by customer</div>
+    <div class="stat-grid" style="grid-template-columns:repeat(3,1fr)">
+      <div class="stat-box"><div class="stat-num" style="color:#1a1a2e">${recs.length}</div><div class="stat-lbl">Customers</div></div>
+      <div class="stat-box"><div class="stat-num" style="color:#cc0000">${outLogs.reduce((s,l)=>s+l.q,0)}</div><div class="stat-lbl">Total Pcs Dispensed</div></div>
+      <div class="stat-box"><div class="stat-num" style="color:#0055cc">${outLogs.length}</div><div class="stat-lbl">Transactions</div></div>
+    </div>
+    <h2>📋 CUSTOMER SUMMARY</h2>
+    <table>
+      <thead><tr><th>Customer</th><th>Total Pcs</th><th>Visits</th><th>First Visit</th><th>Last Visit</th><th>Top Lenses</th></tr></thead>
+      <tbody>${summaryRows}</tbody>
+    </table>
+    <h2 style="margin-top:16px">📖 DETAILED HISTORY BY CUSTOMER</h2>
+    ${detailSections}`;
+
+  openPrintWindow(`${b.label} — Customer Dispensing Report`, body);
+};
+
 // ── PASSWORDS ──
 function renderAdmPasswords(){
   const el = document.getElementById('adm-pwList');
@@ -3096,7 +3463,7 @@ window.go=(id)=>{
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
   if(id==='matrix'){initMatrixUI();renderMatrix();}
-  if(id==='history')renderHistory();
+  if(id==='history'){ renderHistory(); setHistTab(currentHistTab||'logs'); }
   if(id==='admin')renderAdminPanel();
 };
 
@@ -3107,18 +3474,15 @@ let svSelectsBuilt=false, presbySelectsBuilt=false;
 
 function initMatrixUI(){
   buildCoatingPills();
-  // build SV selects once
+  // Wire matrix snap inputs once
   if(!svSelectsBuilt){
-    const se=document.getElementById('mSph'), ce=document.getElementById('mCyl');
-    SPH_VALS.forEach(v=>{const o=document.createElement('option');o.value=fmtSph(v);o.textContent=fmtSph(v);se.appendChild(o);});
-    CYL_VALS.forEach(v=>{const o=document.createElement('option');o.value=fmtCyl(v);o.textContent=v===0?'0.00 (Plano)':fmtCyl(v);ce.appendChild(o);});
+    mxWireSnap('mSph', getSPHList,  snapSPH,  'mx');
+    mxWireSnap('mCyl', getCYLList,  snapCYL,  'mx');
     svSelectsBuilt=true;
   }
-  // build Presbyopia selects once
   if(!presbySelectsBuilt){
-    const ps=document.getElementById('pSph'), pa=document.getElementById('pAdd');
-    PRESB_SPH_VALS.forEach(v=>{const o=document.createElement('option');o.value=v;o.textContent=fmtSph(v);ps.appendChild(o);});
-    ADD_VALS.forEach(v=>{const o=document.createElement('option');o.value=v;o.textContent=fmtAdd(v);pa.appendChild(o);});
+    mxWireSnap('pSph', getPSPHList, snapPSPH, 'mx');
+    mxWireSnap('pAdd', getADDList,  snapADD,  'mx');
     presbySelectsBuilt=true;
   }
   syncUI();
@@ -3223,60 +3587,64 @@ function updateBadge(){
 // MANUAL ENTRY
 // ══════════════════════════════════════════════
 window.manualStockIn=()=>{
-  const sph=parseFloat(document.getElementById('mSph').value);
-  const cyl=parseFloat(document.getElementById('mCyl').value);
+  const sphInp=document.getElementById('mSph');
+  const cylInp=document.getElementById('mCyl');
+  const sph=parseFloat(sphInp._snapped||snapSPH(sphInp.value)||'0');
+  const cyl=parseFloat(cylInp._snapped||snapCYL(cylInp.value||'0')||'0');
+  if(isNaN(sph)){show('⚠ Enter valid SPH','var(--amber)');return;}
   const qty=parseInt(document.getElementById('mQty').value)||1;
   updateInventory(makeSVKey(activeType,activeCoating,sph,cyl),qty,'IN','Manual Entry',activeType,activeCoating,'—');
   renderMatrix();
+  show(`✓ +${qty} stocked in · SPH ${fmtSph(sph)} / CYL ${fmtCyl(cyl)}`,'var(--green)');
 };
 window.manualStockOut=()=>{
-  const sph=parseFloat(document.getElementById('mSph').value);
-  const cyl=parseFloat(document.getElementById('mCyl').value);
+  const sphInp=document.getElementById('mSph');
+  const cylInp=document.getElementById('mCyl');
+  const sph=parseFloat(sphInp._snapped||snapSPH(sphInp.value)||'0');
+  const cyl=parseFloat(cylInp._snapped||snapCYL(cylInp.value||'0')||'0');
+  if(isNaN(sph)){show('⚠ Enter valid SPH','var(--amber)');return;}
   const qty=parseInt(document.getElementById('mQty').value)||1;
   const key=makeSVKey(activeType,activeCoating,sph,cyl);
   const cur=inv.get(key)||0;
   if(qty>cur){
-    if(cur===0){
-      alert(`⚠ OUT OF STOCK\n\n${activeType} · ${coatLabel(activeCoating)}\nSPH ${fmtSph(sph)} / CYL ${fmtCyl(cyl)}\n\nThis lens has 0 units remaining. Cannot dispense.`);
-    } else {
-      alert(`⚠ Insufficient stock\n\nOnly ${cur} pcs available. Cannot dispense ${qty} pcs.`);
-    }
+    if(cur===0) show(`⚠ OUT OF STOCK · SPH ${fmtSph(sph)} / CYL ${fmtCyl(cyl)} has 0 units`,'var(--red)');
+    else show(`⚠ Only ${cur} pcs available. Cannot dispense ${qty}`,'var(--amber)');
     return;
   }
   updateInventory(key,qty,'OUT','Manual Out',activeType,activeCoating,'—');
-  if((cur-qty)===0){
-    setTimeout(()=>alert(`⚠ OUT OF STOCK\n\n${activeType} · ${coatLabel(activeCoating)}\nSPH ${fmtSph(sph)} / CYL ${fmtCyl(cyl)}\n\nLast unit dispensed — now out of stock!`),100);
-  }
   renderMatrix();
+  show(`✓ −${qty} out · SPH ${fmtSph(sph)} / CYL ${fmtCyl(cyl)} · Remaining: ${(cur-qty)}`,'var(--red)');
 };
 window.presbyStockIn=()=>{
-  const sph=parseFloat(document.getElementById('pSph').value);
-  const add=parseFloat(document.getElementById('pAdd').value);
+  const sphInp=document.getElementById('pSph');
+  const addInp=document.getElementById('pAdd');
+  const sph=parseFloat(sphInp._snapped||snapPSPH(sphInp.value)||'0');
+  const add=parseFloat((addInp._snapped||snapADD(addInp.value||'2')||'+2.00').replace('+',''));
+  if(isNaN(sph)||isNaN(add)){show('⚠ Enter valid SPH and ADD','var(--amber)');return;}
   const qty=parseInt(document.getElementById('pQty').value)||1;
   const eye=document.getElementById('pEye').value;
   updateInventory(makePresbKey(activeType,activeCoating,eye,sph,add),qty,'IN','Manual Entry',activeType,activeCoating,eye);
   renderMatrix();
+  show(`✓ +${qty} stocked in · SPH ${fmtSph(sph)} ADD ${fmtAdd(add)} ${eye}`,'var(--green)');
 };
 window.presbyStockOut=()=>{
-  const sph=parseFloat(document.getElementById('pSph').value);
-  const add=parseFloat(document.getElementById('pAdd').value);
+  const sphInp=document.getElementById('pSph');
+  const addInp=document.getElementById('pAdd');
+  const sph=parseFloat(sphInp._snapped||snapPSPH(sphInp.value)||'0');
+  const add=parseFloat((addInp._snapped||snapADD(addInp.value||'2')||'+2.00').replace('+',''));
+  if(isNaN(sph)||isNaN(add)){show('⚠ Enter valid SPH and ADD','var(--amber)');return;}
   const qty=parseInt(document.getElementById('pQty').value)||1;
   const eye=document.getElementById('pEye').value;
   const key=makePresbKey(activeType,activeCoating,eye,sph,add);
   const cur=inv.get(key)||0;
   if(qty>cur){
-    if(cur===0){
-      alert(`⚠ OUT OF STOCK\n\n${activeType} · ${coatLabel(activeCoating)} · ${eye}\nSPH ${fmtSph(sph)} ADD ${fmtAdd(add)}\n\nThis lens has 0 units remaining. Cannot dispense.`);
-    } else {
-      alert(`⚠ Insufficient stock\n\nOnly ${cur} pcs available. Cannot dispense ${qty} pcs.`);
-    }
+    if(cur===0) show(`⚠ OUT OF STOCK · ${eye} SPH ${fmtSph(sph)} ADD ${fmtAdd(add)} has 0 units`,'var(--red)');
+    else show(`⚠ Only ${cur} pcs available`,'var(--amber)');
     return;
   }
   updateInventory(key,qty,'OUT','Manual Out',activeType,activeCoating,eye);
-  if((cur-qty)===0){
-    setTimeout(()=>alert(`⚠ OUT OF STOCK\n\n${activeType} · ${coatLabel(activeCoating)} · ${eye}\nSPH ${fmtSph(sph)} ADD ${fmtAdd(add)}\n\nLast unit dispensed — now out of stock!`),100);
-  }
   renderMatrix();
+  show(`✓ −${qty} out · ${eye} SPH ${fmtSph(sph)} ADD ${fmtAdd(add)} · Remaining: ${(cur-qty)}`,'var(--red)');
 };
 
 // ══════════════════════════════════════════════
@@ -3716,23 +4084,84 @@ let searchSelectsBuilt=false;
 
 function buildSearchSelects(){
   if(searchSelectsBuilt) return;
-  // SV selects
-  const ss=document.getElementById('sSph'), sc=document.getElementById('sCyl');
-  SPH_VALS.forEach(v=>{
-    const o=document.createElement('option'); o.value=fmtSph(v); o.textContent=fmtSph(v); ss.appendChild(o);
-  });
-  CYL_VALS.forEach(v=>{
-    const o=document.createElement('option'); o.value=fmtCyl(v); o.textContent=v===0?'0.00 (Plano)':fmtCyl(v); sc.appendChild(o);
-  });
-  // Presb selects
-  const ps=document.getElementById('psSph'), pa=document.getElementById('psAdd');
-  PRESB_SPH_VALS.forEach(v=>{
-    const o=document.createElement('option'); o.value=fmtSph(v); o.textContent=fmtSph(v); ps.appendChild(o);
-  });
-  ADD_VALS.forEach(v=>{
-    const o=document.createElement('option'); o.value=fmtAdd(v); o.textContent=fmtAdd(v); pa.appendChild(o);
-  });
+  mxWireSnap('sSph',  getSPHList,  snapSPH,  'search');
+  mxWireSnap('sCyl',  getCYLList,  snapCYL,  'search');
+  mxWireSnap('psSph', getPSPHList, snapPSPH, 'search');
+  mxWireSnap('psAdd', getADDList,  snapADD,  'search');
   searchSelectsBuilt=true;
+}
+
+// Wire a snap input in matrix/search context (uses activeType/activeCoating for stock hints)
+function mxWireSnap(id, listFn, snapFn, ctx){
+  const inp=document.getElementById(id);
+  const pill=document.getElementById(id+'-pill');
+  const ac=document.getElementById(id+'-ac');
+  if(!inp) return;
+  inp._snapped=null;
+
+  function getStockHint(val){
+    // For matrix/search, show stock across ALL coatings for context
+    if(!val) return null;
+    let total=0, found=false;
+    inv.forEach((q,k)=>{
+      const p=k.split('|');
+      if(isPresb(activeType)){
+        if(p[0]===activeType && (p[3]===val||p[4]===val)) { total+=q; found=true; }
+      } else {
+        if(p[0]===activeType && (p[2]===val||p[3]===val)) { total+=q; found=true; }
+      }
+    });
+    return found?total:null;
+  }
+
+  function update(){
+    const raw=inp.value.trim();
+    if(!raw){ if(pill) pill.style.display='none'; if(ac) ac.classList.remove('open'); inp._snapped=null; inp.className='se-snap-input'; return; }
+    const snapped=snapFn(raw);
+    inp._snapped=snapped;
+    if(pill){
+      if(snapped){
+        const stock=getStockHint(snapped);
+        const st=stock===null?'':stock===0?' · OUT':` · ${stock} pcs total`;
+        pill.textContent=`→ ${snapped}${st}`;
+        pill.className='se-snap-pill'+(stock===0?' warn':'');
+        pill.style.display='block';
+        inp.className='se-snap-input'+(stock===0?' snap-warn':' snap-ok');
+      } else {
+        pill.textContent='✗ invalid'; pill.className='se-snap-pill warn'; pill.style.display='block';
+        inp.className='se-snap-input snap-warn';
+      }
+    }
+    // Autocomplete
+    if(!ac) return;
+    const list=listFn();
+    const rawC=raw.replace('+','');
+    const matches=list.filter(v=>{ const vn=v.replace('+',''); return vn.startsWith(rawC)||vn.includes(rawC)||(snapped&&v===snapped); }).slice(0,12);
+    if(matches.length===0||(matches.length===1&&matches[0]===snapped&&raw===snapped)){ ac.classList.remove('open'); return; }
+    ac.innerHTML=matches.map(v=>{
+      const st=getStockHint(v);
+      const sc=st===null?'':st===0?' low':' ok';
+      const stxt=st===null?'':st===0?'OUT':`${st}`;
+      return `<div class="se-ac-item${v===snapped?' highlighted':''}" data-val="${v}"><span>${v}</span><span class="ac-stock${sc}">${stxt}</span></div>`;
+    }).join('');
+    ac.querySelectorAll('.se-ac-item').forEach(item=>{
+      item.addEventListener('mousedown',e=>{ e.preventDefault(); inp.value=item.dataset.val; inp._snapped=item.dataset.val; ac.classList.remove('open'); update(); });
+    });
+    ac.classList.add('open');
+  }
+
+  inp.addEventListener('input', update);
+  inp.addEventListener('focus', ()=>{ if(inp.value) update(); });
+  inp.addEventListener('keydown', e=>{
+    const items=ac?ac.querySelectorAll('.se-ac-item'):[];
+    const hi=ac?ac.querySelector('.highlighted'):null;
+    let idx=[...items].indexOf(hi);
+    if(e.key==='ArrowDown'){ e.preventDefault(); idx=Math.min(idx+1,items.length-1); items.forEach((x,i)=>x.classList.toggle('highlighted',i===idx)); items[idx]?.scrollIntoView({block:'nearest'}); }
+    else if(e.key==='ArrowUp'){ e.preventDefault(); idx=Math.max(idx-1,0); items.forEach((x,i)=>x.classList.toggle('highlighted',i===idx)); items[idx]?.scrollIntoView({block:'nearest'}); }
+    else if((e.key==='Enter'||e.key==='Tab')&&ac){ const h=ac.querySelector('.highlighted'); if(h){ e.preventDefault(); inp.value=h.dataset.val; inp._snapped=h.dataset.val; ac.classList.remove('open'); update(); } }
+    else if(e.key==='Escape'&&ac){ ac.classList.remove('open'); }
+  });
+  document.addEventListener('click', e=>{ if(ac&&!e.target.closest('.se-snap-wrap')) ac.classList.remove('open'); });
 }
 
 // Show correct search row when type changes
@@ -3767,12 +4196,18 @@ window.doSearch=()=>{
 
   let filterSph='', filterSecond='', filterEye='';
   if(!presb){
-    filterSph   = document.getElementById('sSph').value;
-    filterSecond= document.getElementById('sCyl').value; // CYL
+    const si=document.getElementById('sSph'), ci=document.getElementById('sCyl');
+    filterSph   = si._snapped||snapSPH(si.value)||'';
+    filterSecond= ci._snapped||snapCYL(ci.value||'')||'';
+    if(si.value&&!filterSph) filterSph=''; // empty = any
+    if(!ci.value) filterSecond='';
   } else {
-    filterSph   = document.getElementById('psSph').value;
-    filterSecond= document.getElementById('psAdd').value; // ADD
-    filterEye   = document.getElementById('psEye').value; // RE / LE / PAIR / ""
+    const si=document.getElementById('psSph'), ai=document.getElementById('psAdd');
+    filterSph   = si._snapped||snapPSPH(si.value)||'';
+    filterSecond= ai._snapped||snapADD(ai.value||'')||'';
+    if(!si.value) filterSph='';
+    if(!ai.value) filterSecond='';
+    filterEye   = document.getElementById('psEye').value;
   }
 
   if(!filterSph && !filterSecond){
@@ -3882,10 +4317,13 @@ window.doSearch=()=>{
 };
 
 window.clearSearch=()=>{
-  // Reset all selects
-  ['sSph','sCyl','psSph','psAdd','psEye'].forEach(id=>{
-    const el=document.getElementById(id); if(el) el.value='';
+  ['sSph','sCyl','psSph','psAdd'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el){ el.value=''; el._snapped=null; el.className='se-snap-input'; }
+    const pill=document.getElementById(id+'-pill'); if(pill) pill.style.display='none';
+    const ac=document.getElementById(id+'-ac'); if(ac) ac.classList.remove('open');
   });
+  const psEye=document.getElementById('psEye'); if(psEye) psEye.value='';
   document.getElementById('searchResults').style.display='none';
   document.getElementById('searchResultsList').innerHTML='';
 };
@@ -3910,16 +4348,25 @@ window.setScanMode=(m)=>{
     if(!el) return;
     el.className='t-btn'+(x===m?(' '+(x==='IN'?'active-out':x==='OUT'?'active-out':'active-ret')):'');
   });
-  // Style action button
+  // Style main action button
   const btn=document.getElementById('se-actionBtn');
   if(btn){
-    btn.style.background = m==='IN'?'rgba(0,255,140,0.18)':m==='OUT'?'var(--red)':'rgba(160,80,255,0.25)';
-    btn.style.color = m==='IN'?'var(--green)':'#fff';
-    btn.textContent = m==='IN'?'＋ CONFIRM STOCK IN': m==='OUT'?'− CONFIRM STOCK OUT':'↩ CONFIRM RETURN';
+    btn.style.background = m==='IN'?'rgba(0,255,140,0.18)':'var(--glass)';
+    btn.style.color = m==='IN'?'var(--green)':'var(--text2)';
+    btn.style.border = m==='IN'?'1px solid rgba(0,255,140,.3)':'1px solid var(--border)';
+    btn.textContent = m==='IN'?'＋ CONFIRM STOCK IN':'＋ ADD TO BASKET';
+    btn.onclick = m==='IN' ? ()=>seSubmit() : ()=>seAddToBasket();
   }
-  // Show/hide recipient
+  // Show/hide basket & add-another btn
+  const basket=document.getElementById('se-basket');
+  const addBtn=document.getElementById('se-add-basket-btn');
   const rw=document.getElementById('se-recipientWrap');
-  if(rw) rw.style.display = m==='IN'?'none':'block';
+  if(basket) basket.style.display = m!=='IN' ? 'block':'none';
+  if(addBtn) addBtn.style.display = 'none'; // hidden until first item added
+  if(rw) rw.style.display = 'none'; // recipient now lives in basket
+  // Clear basket when switching modes
+  seBasketItems=[];
+  renderBasket();
 };
 
 window.setSEType=(t)=>{
@@ -4157,6 +4604,9 @@ function seSelectAC(inp, val, snapFn, pill, ac, label){
 }
 
 window.seSubmit=()=>{
+  // In OUT/RETURN mode, seSubmit is replaced by seAddToBasket on the button
+  // but keep this as fallback for Stock IN only
+  if(scanMode!=='IN'){ seAddToBasket(); return; }
   const presb=isPresb(seType);
   let key, rxLabel, metaLabel;
   if(!presb){
@@ -4233,6 +4683,292 @@ function seFeedback(msg,color){
 // legacy stubs (referenced elsewhere, keep empty)
 window.stopScanner=()=>{};
 window.setOutMode=(m)=>{ setScanMode(m); };
+
+// ══════════════════════════════════════════════
+// BASKET — Multi-lens Stock Out
+// ══════════════════════════════════════════════
+let seBasketItems = []; // [{key, rxLabel, metaLabel, qty, eyeVal}]
+
+function renderBasket(){
+  const list=document.getElementById('se-basket-list');
+  const count=document.getElementById('se-basket-count');
+  const commitBtn=document.getElementById('se-basket-commit');
+  if(!list) return;
+  const total=seBasketItems.reduce((s,i)=>s+i.qty,0);
+  if(count) count.textContent=`(${seBasketItems.length} lens${seBasketItems.length!==1?'es':''}, ${total} pcs)`;
+  if(!seBasketItems.length){
+    list.innerHTML=`<div style="font-family:var(--mono);font-size:10px;color:var(--text3);text-align:center;padding:8px">Basket empty — add lenses below</div>`;
+    if(commitBtn) commitBtn.disabled=true;
+    return;
+  }
+  if(commitBtn) commitBtn.disabled=false;
+  list.innerHTML=seBasketItems.map((item,idx)=>`
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 8px;background:rgba(255,255,255,.03);border-radius:7px;margin-bottom:5px;border:1px solid var(--border2)">
+      <div>
+        <div style="font-family:var(--mono);font-size:11px;color:var(--cyan)">${item.rxLabel}</div>
+        <div style="font-family:var(--mono);font-size:9px;color:var(--text2)">${item.metaLabel}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-family:var(--display);font-size:18px;color:var(--red)">×${item.qty}</span>
+        <button onclick="seBasketRemove(${idx})" style="background:none;border:none;color:var(--text3);font-size:16px;cursor:pointer;line-height:1;padding:2px 4px">✕</button>
+      </div>
+    </div>`).join('');
+}
+
+window.seAddToBasket=()=>{
+  // Validate & build the item same as seSubmit but don't commit yet
+  const presb=isPresb(seType);
+  let key, rxLabel, metaLabel, eyeVal;
+  if(!presb){
+    const sphInp=document.getElementById('se-sph');
+    const cylInp=document.getElementById('se-cyl');
+    const sph=sphInp._snapped||snapSPH(sphInp.value);
+    const cyl=cylInp._snapped||snapCYL(cylInp.value||'0');
+    if(!sph){ seFeedback('⚠ Enter a valid SPH value','var(--amber)'); sphInp.focus(); return; }
+    const cylVal=cyl||'0.00';
+    key=makeSVKey(seType,seCoat,parseFloat(sph),parseFloat(cylVal));
+    rxLabel=`SPH ${sph} / CYL ${cylVal}`;
+    metaLabel=`${seType} · ${coatLabel(seCoat)}`;
+    eyeVal='—';
+  } else {
+    const sphInp=document.getElementById('se-psph');
+    const addInp=document.getElementById('se-add');
+    const sph=sphInp._snapped||snapPSPH(sphInp.value);
+    const add=addInp._snapped||snapADD(addInp.value||'2');
+    const eye=document.getElementById('se-eye').value;
+    if(!sph){ seFeedback('⚠ Enter valid SPH','var(--amber)'); sphInp.focus(); return; }
+    if(!add){ seFeedback('⚠ Enter valid ADD','var(--amber)'); addInp.focus(); return; }
+    key=makePresbKey(seType,seCoat,eye,parseFloat(sph),parseFloat(add.replace('+','')));
+    rxLabel=`SPH ${sph} ADD ${add} · ${eye}`;
+    metaLabel=`${seType} · ${coatLabel(seCoat)}`;
+    eyeVal=eye;
+  }
+  const qty=parseInt(document.getElementById('se-qty').value)||1;
+  const curQty=inv.get(key)||0;
+
+  // Stock check
+  // Sum what's already in basket for this key
+  const alreadyBasket=seBasketItems.filter(i=>i.key===key).reduce((s,i)=>s+i.qty,0);
+  if(scanMode==='OUT' && (alreadyBasket+qty)>curQty){
+    const avail=Math.max(0,curQty-alreadyBasket);
+    seFeedback(avail===0?`⚠ OUT OF STOCK — ${rxLabel}`:`⚠ Only ${avail} more available for ${rxLabel}`,'var(--red)');
+    return;
+  }
+
+  seBasketItems.push({key,rxLabel,metaLabel,qty,eyeVal,type:seType,coat:seCoat});
+  renderBasket();
+  document.getElementById('se-qty').value='1';
+  // Clear the input fields for next lens
+  ['se-sph','se-cyl','se-psph','se-add'].forEach(id=>{
+    const inp=document.getElementById(id);
+    if(inp){ inp.value=''; inp._snapped=null; inp.className='se-snap-input'; }
+    const pill=document.getElementById(id+'-pill'); if(pill) pill.style.display='none';
+  });
+  seFeedback(`✓ Added to basket: ${rxLabel}`,'var(--green)');
+};
+
+window.seBasketRemove=(idx)=>{
+  seBasketItems.splice(idx,1);
+  renderBasket();
+};
+
+window.seBasketClear=()=>{
+  seBasketItems=[];
+  renderBasket();
+};
+
+window.seBasketCommit=()=>{
+  if(!seBasketItems.length){ seFeedback('⚠ Basket is empty','var(--amber)'); return; }
+  const recipient=(document.getElementById('se-basket-recipient')?.value||'').trim()||'Unknown';
+  const action = scanMode==='RETURN'?'IN':'OUT';
+  const noteTag = scanMode==='RETURN'?` (Ret)`:'';
+
+  seBasketItems.forEach(item=>{
+    updateInventory(item.key, item.qty, action, recipient+noteTag, item.type, item.coat, item.eyeVal);
+  });
+  save(); renderStats();
+
+  const total=seBasketItems.reduce((s,i)=>s+i.qty,0);
+  const count=seBasketItems.length;
+  seFeedback(`✓ Dispensed ${total} pcs (${count} lens${count!==1?'es':''}) to ${recipient}`,'var(--green)');
+  seBasketItems=[];
+  renderBasket();
+  if(document.getElementById('se-basket-recipient')) document.getElementById('se-basket-recipient').value='';
+};
+
+// ══════════════════════════════════════════════
+// CUSTOMER LEDGER
+// ══════════════════════════════════════════════
+let currentHistTab = 'logs';
+
+window.setHistTab=(tab)=>{
+  currentHistTab=tab;
+  document.getElementById('hist-panel-logs').style.display  = tab==='logs'?'block':'none';
+  document.getElementById('hist-panel-ledger').style.display= tab==='ledger'?'block':'none';
+  const logBtn=document.getElementById('htab-logs');
+  const ledBtn=document.getElementById('htab-ledger');
+  if(logBtn){ logBtn.style.background=tab==='logs'?'rgba(0,240,255,.12)':'var(--glass)'; logBtn.style.color=tab==='logs'?'var(--cyan)':'var(--text2)'; logBtn.style.border=tab==='logs'?'1px solid rgba(0,240,255,.3)':'1px solid var(--border)'; }
+  if(ledBtn){ ledBtn.style.background=tab==='ledger'?'rgba(160,80,255,.12)':'var(--glass)'; ledBtn.style.color=tab==='ledger'?'var(--accent2)':'var(--text2)'; ledBtn.style.border=tab==='ledger'?'1px solid rgba(160,80,255,.3)':'1px solid var(--border)'; }
+  if(tab==='ledger') renderLedgerSummary();
+};
+
+function getAllOutLogs(){
+  // Gather OUT logs from current branch logs + archive
+  const bid=activeBranchId();
+  let source=[...logs];
+  try {
+    const arch=JSON.parse(localStorage.getItem(branchStorageKey(bid)+'_arch')||'[]');
+    if(arch.length) source=[...source,...arch];
+  } catch(e){}
+  return source.filter(l=>l.f==='OUT'||l.f==='IN'); // include returns too
+}
+
+function getRecipients(){
+  const all=getAllOutLogs();
+  const map={};
+  all.forEach(l=>{
+    const r=(l.r||'').replace(/\s*\(Ret\)/,'').trim();
+    if(!r||r==='Manual Out'||r==='Manual Entry'||r==='—') return;
+    if(!map[r]) map[r]={name:r,total:0,visits:new Set(),lastDate:null,lens:[]};
+    if(l.f==='OUT') map[r].total+=l.q;
+    const dateKey=(l.d||'').trim();
+    if(dateKey) map[r].visits.add(dateKey);
+    if(l.d){ if(!map[r].lastDate||l.d>map[r].lastDate) map[r].lastDate=l.d; }
+    map[r].lens.push(l);
+  });
+  return Object.values(map).sort((a,b)=>b.total-a.total);
+}
+
+function renderLedgerSummary(){
+  const inp=document.getElementById('ledgerSearch');
+  if(inp&&inp.value.trim()) return; // don't overwrite if searching
+  const all=document.getElementById('ledger-all-recipients');
+  if(!all) return;
+  const recs=getRecipients();
+  if(!recs.length){ all.innerHTML=`<div style="font-family:var(--mono);font-size:10px;color:var(--text2);text-align:center;padding:20px">No dispensing records found yet.</div>`; return; }
+  all.innerHTML=`
+    <div style="font-family:var(--mono);font-size:9px;color:var(--text2);margin-bottom:8px;letter-spacing:.5px">ALL RECIPIENTS (${recs.length}) — tap to view full ledger</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px">
+      ${recs.map(r=>`
+        <div onclick="ledgerSelectName('${escapeHtml(r.name)}')" style="background:rgba(160,80,255,.06);border:1px solid rgba(160,80,255,.2);border-radius:10px;padding:10px;cursor:pointer;transition:.15s" onmouseover="this.style.background='rgba(160,80,255,.12)'" onmouseout="this.style.background='rgba(160,80,255,.06)'">
+          <div style="font-family:var(--display);font-size:13px;color:var(--accent2);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(r.name)}</div>
+          <div style="font-family:var(--mono);font-size:9px;color:var(--text2)">${r.total} pcs · ${r.visits.size} visit${r.visits.size!==1?'s':''}</div>
+          <div style="font-family:var(--mono);font-size:8px;color:var(--text3);margin-top:2px">Last: ${r.lastDate||'—'}</div>
+        </div>`).join('')}
+    </div>`;
+}
+
+window.ledgerSelectName=(name)=>{
+  const inp=document.getElementById('ledgerSearch');
+  if(inp) inp.value=name;
+  document.getElementById('ledgerSuggest').style.display='none';
+  renderLedger();
+};
+
+window.ledgerAutoSuggest=()=>{
+  const inp=document.getElementById('ledgerSearch');
+  const sug=document.getElementById('ledgerSuggest');
+  if(!inp||!sug) return;
+  const q=inp.value.trim().toLowerCase();
+  if(!q){ sug.style.display='none'; return; }
+  const recs=getRecipients().filter(r=>r.name.toLowerCase().includes(q)).slice(0,8);
+  if(!recs.length){ sug.style.display='none'; return; }
+  sug.innerHTML=recs.map(r=>`
+    <div onclick="ledgerSelectName('${escapeHtml(r.name)}')" style="padding:8px 12px;font-family:var(--mono);font-size:11px;cursor:pointer;border-bottom:1px solid var(--border2);display:flex;justify-content:space-between" onmouseover="this.style.background='var(--panel2)'" onmouseout="this.style.background=''">
+      <span style="color:var(--accent2)">${escapeHtml(r.name)}</span>
+      <span style="color:var(--text2);font-size:9px">${r.total} pcs · ${r.visits.size} visits</span>
+    </div>`).join('');
+  sug.style.display='block';
+  document.addEventListener('click', e=>{ if(!e.target.closest('#ledgerSearch')&&!e.target.closest('#ledgerSuggest')) sug.style.display='none'; }, {once:true});
+};
+
+window.renderLedger=()=>{
+  const inp=document.getElementById('ledgerSearch');
+  const result=document.getElementById('ledger-result');
+  const q=(inp?.value||'').trim().toLowerCase();
+  document.getElementById('ledgerSuggest').style.display='none';
+  document.getElementById('ledger-all-recipients').style.display=q?'none':'block';
+  if(!result) return;
+
+  if(!q){
+    result.innerHTML='';
+    renderLedgerSummary();
+    return;
+  }
+
+  const allLogs=getAllOutLogs();
+  const matched=allLogs.filter(l=>(l.r||'').toLowerCase().includes(q));
+
+  if(!matched.length){
+    result.innerHTML=`<div style="font-family:var(--mono);font-size:11px;color:var(--text2);text-align:center;padding:24px">No records found for "${escapeHtml(q)}"</div>`;
+    return;
+  }
+
+  // Group by date
+  const byDate={};
+  matched.forEach(l=>{
+    const d=l.d||'Unknown';
+    if(!byDate[d]) byDate[d]={date:d,time:l.t||'',logs:[],totalOut:0};
+    byDate[d].logs.push(l);
+    if(l.f==='OUT') byDate[d].totalOut+=l.q;
+  });
+
+  const totalPcs=matched.filter(l=>l.f==='OUT').reduce((s,l)=>s+l.q,0);
+  const visits=Object.keys(byDate).length;
+  const uniqueName=matched[0]?.r?.replace(/\s*\(Ret\)/,'').trim()||q;
+
+  result.innerHTML=`
+    <div style="background:rgba(160,80,255,.06);border:1px solid rgba(160,80,255,.25);border-radius:12px;padding:14px;margin-bottom:14px">
+      <div style="font-family:var(--display);font-size:18px;color:var(--accent2);margin-bottom:4px">👤 ${escapeHtml(uniqueName)}</div>
+      <div style="display:flex;gap:16px;font-family:var(--mono);font-size:10px;color:var(--text2);flex-wrap:wrap">
+        <span>Total dispensed: <b style="color:var(--red)">${totalPcs} pcs</b></span>
+        <span>Visits: <b style="color:var(--cyan)">${visits}</b></span>
+        <span>First: <b style="color:var(--text)">${Object.keys(byDate).at(-1)||'—'}</b></span>
+        <span>Last: <b style="color:var(--text)">${Object.keys(byDate)[0]||'—'}</b></span>
+      </div>
+    </div>
+
+    ${Object.entries(byDate).map(([date,visit])=>{
+      const rows=visit.logs.map(l=>{
+        const p=l.l.split('|');
+        const presb=isPresb(p[0]);
+        const ll=presb&&p.length>=5?`${p[3]} ADD${p[4]}`:(p.length>=4?`${p[2]}/${p[3]}`:l.l);
+        const isRet=l.r&&l.r.includes('(Ret)');
+        const color=isRet?'var(--cyan)':l.f==='IN'?'var(--green)':'var(--red)';
+        const label=isRet?'RETURN':l.f;
+        return `<tr>
+          <td style="font-family:var(--mono);font-size:10px;color:var(--text2)">${l.t||''}</td>
+          <td style="font-size:10px;color:var(--text2)">${l.tp||'-'}</td>
+          <td style="font-family:var(--mono);font-size:11px">${ll}</td>
+          <td style="font-size:10px;color:var(--text2)">${l.ct||'-'}</td>
+          <td style="font-family:var(--display);font-size:16px;color:${color}">${l.f==='OUT'?'-':'+'}${l.q}</td>
+          <td style="font-size:9px;color:${color}">${label}</td>
+        </tr>`;
+      }).join('');
+      return `
+        <div style="margin-bottom:12px;border:1px solid var(--border2);border-radius:10px;overflow:hidden">
+          <div style="background:rgba(255,255,255,.03);padding:8px 12px;display:flex;justify-content:space-between;align-items:center">
+            <span style="font-family:var(--display);font-size:14px;color:var(--text)">📅 ${date}</span>
+            <span style="font-family:var(--mono);font-size:10px;color:var(--red)">${visit.totalOut} pcs out</span>
+          </div>
+          <div style="overflow-x:auto">
+            <table class="data-table" style="margin:0">
+              <thead><tr><th>Time</th><th>Type</th><th>Rx</th><th>Coating</th><th>Qty</th><th>Action</th></tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+        </div>`;
+    }).join('')}`;
+};
+
+window.clearLedger=()=>{
+  const inp=document.getElementById('ledgerSearch');
+  const result=document.getElementById('ledger-result');
+  if(inp) inp.value='';
+  if(result) result.innerHTML='';
+  document.getElementById('ledger-all-recipients').style.display='block';
+  renderLedgerSummary();
+};
 // ══════════════════════════════════════════════
 // SMART QR / LABEL PARSER
 // Accepts human-readable lens labels and maps them
