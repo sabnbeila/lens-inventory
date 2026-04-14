@@ -5536,15 +5536,9 @@ async function pushUnsyncedTx(branchId){
     };
   }
 
-  // Use a transaction to ensure we only write NEW keys
-  // Firebase update() only sets keys that don't exist when combined with
-  // a read-check pattern; we use individual set-if-not-exists via runTransaction
-  for(const [id, data] of Object.entries(updates)){
-    await txRef.child(id).transaction(existing => {
-      if(existing !== null) return; // already exists — don't overwrite
-      return data;
-    });
-  }
+  // Batch all new transactions in one single update() call — syncIds are
+  // unique UUIDs so there are no key collisions; no need for per-key transactions.
+  await txRef.update(updates);
 
   // Update stock delta in Firebase (additive, not replace)
   await pushStockDeltas(branchId, unsynced);
@@ -5562,13 +5556,26 @@ async function pushUnsyncedTx(branchId){
 // ── Push stock deltas (additive) ──
 async function pushStockDeltas(branchId, txList){
   const stockRef = fbDb.ref(`branches/${branchId}/stock`);
+
+  // 1. Aggregate all deltas locally first
+  const deltas = {};
   for(const tx of txList){
-    const safeKey = tx.l.replace(/[.#$[\]]/g,'|'); // keep | readable
+    const eKey = encodeKey(tx.l);
     const delta = tx.f==='IN' ? tx.q : -tx.q;
-    await stockRef.child(encodeKey(tx.l)).transaction(cur => {
-      return Math.max(0, (cur||0) + delta);
-    });
+    deltas[eKey] = (deltas[eKey] || 0) + delta;
   }
+
+  // 2. One read to get current cloud stock
+  const snap = await stockRef.get();
+  const current = snap.val() || {};
+
+  // 3. Compute new values and write everything in one batch update
+  const updates = {};
+  for(const [k, delta] of Object.entries(deltas)){
+    updates[k] = Math.max(0, (current[k] || 0) + delta);
+  }
+  await stockRef.update(updates);
+
   // Update last active
   await fbDb.ref(`branches/${branchId}/meta`).update({
     lastActive: new Date().toISOString(),
@@ -5615,9 +5622,7 @@ async function adminPullAll(){
   if(!fbReady){ const ok = await initFirebase(); if(!ok){ setSyncState('fail','NO CLOUD'); return; } }
   try {
     const branches = getBranchConfig();
-    for(const b of branches){
-      await pullBranchStock(b.id);
-    }
+    await Promise.all(branches.map(b => pullBranchStock(b.id)));
     setSyncState('ok','ALL PULLED');
     if(typeof renderAdmLiveView==='function') renderAdmLiveView();
   } catch(e){
