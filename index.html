@@ -3586,11 +3586,16 @@ function updateBadge(){
 // ══════════════════════════════════════════════
 // MANUAL ENTRY
 // ══════════════════════════════════════════════
+// CYL must always be 0 or negative — auto-negate if user types positive
+function safeCYL(inp){
+  const raw=parseFloat(inp._snapped||snapCYL(inp.value||'0')||'0');
+  return isNaN(raw)?0:(raw>0?-raw:raw);
+}
 window.manualStockIn=()=>{
   const sphInp=document.getElementById('mSph');
   const cylInp=document.getElementById('mCyl');
   const sph=parseFloat(sphInp._snapped||snapSPH(sphInp.value)||'0');
-  const cyl=parseFloat(cylInp._snapped||snapCYL(cylInp.value||'0')||'0');
+  const cyl=safeCYL(cylInp);
   if(isNaN(sph)){show('⚠ Enter valid SPH','var(--amber)');return;}
   const qty=parseInt(document.getElementById('mQty').value)||1;
   updateInventory(makeSVKey(activeType,activeCoating,sph,cyl),qty,'IN','Manual Entry',activeType,activeCoating,'—');
@@ -3601,7 +3606,7 @@ window.manualStockOut=()=>{
   const sphInp=document.getElementById('mSph');
   const cylInp=document.getElementById('mCyl');
   const sph=parseFloat(sphInp._snapped||snapSPH(sphInp.value)||'0');
-  const cyl=parseFloat(cylInp._snapped||snapCYL(cylInp.value||'0')||'0');
+  const cyl=safeCYL(cylInp);
   if(isNaN(sph)){show('⚠ Enter valid SPH','var(--amber)');return;}
   const qty=parseInt(document.getElementById('mQty').value)||1;
   const key=makeSVKey(activeType,activeCoating,sph,cyl);
@@ -4432,10 +4437,11 @@ function snapSPH(raw){
   return fmtSph(clamped);
 }
 function snapCYL(raw){
-  const n=parseFloat(raw.replace(',','.'));
+  const n=parseFloat(String(raw).replace(',','.'));
   if(isNaN(n)) return null;
-  let snapped=Math.round(n/0.25)*0.25;
-  snapped=Math.max(-6,Math.min(0,snapped)); // CYL always 0 or negative
+  const abs=Math.abs(n); // accept positive entry — negate it
+  let snapped=Math.round(abs/0.25)*0.25;
+  snapped=-Math.min(6,snapped); // CYL always 0 or negative
   return fmtCyl(snapped);
 }
 function snapPSPH(raw){
@@ -5745,44 +5751,133 @@ function initTheme(){
 initTheme();
 updateStorageMonitor();
 
-// ── Clean up old heavy seed data (v1/v2/v3) if present ──
-(function cleanOldSeeds(){
-  const oldFlags = ['spec_seed_allbranches_v1','spec_seed_allbranches_v2','spec_seed_allbranches_v3'];
-  const hadOld = oldFlags.some(f => localStorage.getItem(f));
-  if(!hadOld) return;
-  // Remove seed flags
-  oldFlags.forEach(f => localStorage.removeItem(f));
-  // Strip all seeded keys (qty=1) from branch inventories, keeping only real stock (qty>1 or OUT-tracked zeros from real dispenses)
-  // Actually: just wipe the bloated presb keys — SV keys with qty=1 are indistinguishable from real stock, leave them
-  const BRANCHES = ['twese','nyubwa','mengo','mbarara'];
-  const COATINGS = ['cr39_clear','white_hmc','sss_mar','white_bluecut','bluecut_sss'];
-  const PRESB_TYPES = ['Bifocal','Progressive'];
-  const PRESB_SPH=[], ADD_VALS=[];
-  for(let s=4.00;s>=-4.01;s-=0.25) PRESB_SPH.push(parseFloat(s.toFixed(2)));
-  for(let a=1.00;a<=3.51;a+=0.25) ADD_VALS.push(parseFloat(a.toFixed(2)));
-  const fs=v=>v===0?'0.00':((v>0?'+':'')+v.toFixed(2));
-  const fa=v=>'+'+v.toFixed(2);
-  BRANCHES.forEach(branch=>{
-    const BK='spec_lens_'+branch+'_v1';
-    const data=JSON.parse(localStorage.getItem(BK)||'{"i":[],"l":[]}');
-    const inv=new Map(data.i||[]);
-    // Remove all presb seed keys (RE=1 and LE=1 were the seed values)
-    COATINGS.forEach(coat=>{
-      PRESB_TYPES.forEach(pt=>{
-        PRESB_SPH.forEach(sph=>{
-          ADD_VALS.forEach(add=>{
-            ['RE','LE','PAIR'].forEach(eye=>{
-              const k=pt+'|'+coat+'|'+eye+'|'+fs(sph)+'|'+fa(add);
-              if(inv.get(k)===1) inv.delete(k); // only remove seed qty=1, keep real stock
+// ══════════════════════════════════════════════════════════════
+// DEEP CLEAN v4 — runs once per device
+// Fixes three problems:
+//   1. Phantom White HMC Single Vision qty=1 seeds (extreme SPH range)
+//   2. Positive CYL keys (e.g. +1.75 instead of -1.75) — merge into correct key then delete
+//   3. Old presbyopic seed data (v1/v2/v3 flags)
+// After cleaning localStorage, pushes corrected stock to Firebase
+// so ALL devices converge to the same truth on next sync.
+// ══════════════════════════════════════════════════════════════
+(function deepCleanV4(){
+  const CLEAN_FLAG = 'spec_deep_clean_v4';
+  if(localStorage.getItem(CLEAN_FLAG)) return; // already done on this device
+
+  const BRANCHES_ALL = ['twese','nyubwa','mengo','mbarara'];
+  const fs = v => v===0?'0.00':((v>0?'+':'')+v.toFixed(2));
+  const fa = v => '+'+v.toFixed(2);
+
+  let totalDeleted = 0, totalMerged = 0, totalCylFixed = 0;
+
+  BRANCHES_ALL.forEach(branch => {
+    const BK = 'spec_lens_' + branch + '_v1';
+    const data = JSON.parse(localStorage.getItem(BK)||'{"i":[],"l":[]}');
+    const inv = new Map(data.i||[]);
+
+    // ── FIX 1: Remove phantom White HMC SV qty=1 seeds ──
+    // These were seeded across the full SPH matrix (-20 to +20) with qty=1.
+    // Real stock has qty > 1 except for genuinely low items, but the pattern
+    // of EVERY extreme SPH having exactly 1 is a clear seed fingerprint.
+    // Safe rule: delete White HMC Single keys where qty===1 AND |SPH| > 8.00
+    inv.forEach((qty, key) => {
+      const parts = key.split('|');
+      if(parts[0]==='Single' && parts[1]==='white_hmc' && qty===1){
+        const sph = parseFloat(parts[2]);
+        if(!isNaN(sph) && Math.abs(sph) > 8.00){
+          inv.delete(key);
+          totalDeleted++;
+        }
+      }
+    });
+
+    // ── FIX 2: Positive CYL keys → merge qty into correct negative key ──
+    // e.g. Single|sss_mar|-2.50|+1.75 should be Single|sss_mar|-2.50|-1.75
+    const keysToFix = [];
+    inv.forEach((qty, key) => {
+      const parts = key.split('|');
+      // Single Vision key format: Type|coat|sph|cyl
+      if(parts[0]==='Single' && parts.length===4){
+        const cyl = parseFloat(parts[3]);
+        if(!isNaN(cyl) && cyl > 0){
+          keysToFix.push({key, qty, parts});
+        }
+      }
+      // Presbyopic key format: Type|coat|eye|sph|add — CYL not applicable, skip
+    });
+    keysToFix.forEach(({key, qty, parts}) => {
+      const correctCyl = fs(-Math.abs(parseFloat(parts[3])));
+      const correctKey = parts[0]+'|'+parts[1]+'|'+parts[2]+'|'+correctCyl;
+      // Merge: add qty to correct key
+      inv.set(correctKey, (inv.get(correctKey)||0) + qty);
+      inv.delete(key);
+      totalCylFixed++;
+    });
+
+    // ── FIX 3: Old presbyopic seed data (v1/v2/v3) ──
+    const hadOldFlags = ['spec_seed_allbranches_v1','spec_seed_allbranches_v2','spec_seed_allbranches_v3']
+      .some(f => localStorage.getItem(f));
+    if(hadOldFlags){
+      const COATINGS_ALL = ['cr39_clear','white_hmc','sss_mar','white_bluecut','bluecut_sss'];
+      const PRESB_TYPES = ['Bifocal','Progressive'];
+      const PRESB_SPH=[], ADD_VALS=[];
+      for(let s=4.00;s>=-4.01;s-=0.25) PRESB_SPH.push(parseFloat(s.toFixed(2)));
+      for(let a=1.00;a<=3.51;a+=0.25) ADD_VALS.push(parseFloat(a.toFixed(2)));
+      COATINGS_ALL.forEach(coat=>{
+        PRESB_TYPES.forEach(pt=>{
+          PRESB_SPH.forEach(sph=>{
+            ADD_VALS.forEach(add=>{
+              ['RE','LE','PAIR'].forEach(eye=>{
+                const k=pt+'|'+coat+'|'+eye+'|'+fs(sph)+'|'+fa(add);
+                if(inv.get(k)===1){ inv.delete(k); totalDeleted++; }
+              });
             });
           });
         });
       });
-    });
-    data.i=[...inv];
-    localStorage.setItem(BK,JSON.stringify(data));
+    }
+
+    data.i = [...inv];
+    localStorage.setItem(BK, JSON.stringify(data));
   });
-  console.log('🧹 Old seed data cleaned from localStorage');
+
+  // Clear old seed flags
+  ['spec_seed_allbranches_v1','spec_seed_allbranches_v2','spec_seed_allbranches_v3']
+    .forEach(f => localStorage.removeItem(f));
+
+  localStorage.setItem(CLEAN_FLAG, '1');
+  console.log(`🧹 Deep Clean v4 complete — deleted ${totalDeleted} phantom keys, fixed ${totalCylFixed} positive-CYL keys, merged ${totalMerged} duplicates`);
+
+  // ── Push cleaned stock to Firebase so all devices sync ──
+  // Runs after Firebase is ready (boot sequence calls initFirebase early)
+  setTimeout(async () => {
+    try {
+      if(!fbReady){ await initFirebase(); }
+      if(!fbReady){ console.warn('Deep clean: Firebase not ready, skipping cloud push'); return; }
+      const branches = getBranchConfig ? getBranchConfig() : BRANCHES_ALL.map(id=>({id}));
+      for(const b of branches){
+        if(b.id==='admin') continue;
+        const BK = 'spec_lens_' + b.id + '_v1';
+        const data = JSON.parse(localStorage.getItem(BK)||'{"i":[],"l":[]}');
+        const inv = new Map(data.i||[]);
+        if(inv.size === 0) continue;
+        // Build full stock object and push to Firebase (replaces cloud stock for this branch)
+        const stockObj = {};
+        inv.forEach((qty, key) => {
+          if(qty > 0) stockObj[encodeKey(key)] = qty;
+        });
+        await fbDb.ref(`branches/${b.id}/stock`).set(stockObj);
+        await fbDb.ref(`branches/${b.id}/meta`).update({
+          lastClean: new Date().toISOString(),
+          cleanedBy: 'deepCleanV4'
+        });
+        console.log(`☁ Pushed clean stock for ${b.id} — ${inv.size} keys`);
+      }
+      console.log('✅ Deep Clean v4 cloud push complete — all devices will get clean data on next sync');
+    } catch(e){
+      console.error('Deep clean cloud push error:', e);
+    }
+  }, 4000); // wait 4s for Firebase + app to fully boot
 })();
 
 // ══════════════════════════════════════════════
@@ -5807,6 +5902,57 @@ updateStorageMonitor();
   localStorage.setItem(BRANCH_KEY, JSON.stringify({i:[...invMap],l:[...newLogs,...(existing.l||[])]}));
   localStorage.setItem(SEED_FLAG,'1');
   console.log('✅ White HMC stock seeded for Twese: 33 SKUs, 67 units');
+})();
+
+
+// ══════════════════════════════════════════════
+// ONE-TIME CLEANUP: Merge positive-CYL keys into negative-CYL keys
+// Runs once per device. Positive CYL (e.g. +1.75) is invalid — stock
+// is merged into the correct negative key then the bad key is deleted.
+// ══════════════════════════════════════════════
+(function fixPosCylKeys(){
+  const FLAG = 'spec_cylfix_v1';
+  if(localStorage.getItem(FLAG)) return;
+  const BRANCHES = ['twese','nyubwa','mengo','mbarara'];
+  let totalMerged = 0, totalDeleted = 0;
+  BRANCHES.forEach(branch => {
+    const BK = 'spec_lens_' + branch + '_v1';
+    const data = JSON.parse(localStorage.getItem(BK) || '{"i":[],"l":[]}');
+    const invMap = new Map(data.i || []);
+    const toDelete = [];
+    invMap.forEach((qty, key) => {
+      const parts = key.split('|');
+      // Single Vision key: Type|coat|SPH|CYL  (4 parts, no eye)
+      if(parts.length === 4 && parts[0] !== 'Bifocal' && parts[0] !== 'Progressive'){
+        const cylStr = parts[3];
+        const cylVal = parseFloat(cylStr);
+        if(!isNaN(cylVal) && cylVal > 0){
+          // Build the correct negative-CYL key
+          const negCyl = -cylVal;
+          const negStr = negCyl === 0 ? '0.00' : negCyl.toFixed(2); // e.g. -1.75
+          const correctKey = parts[0]+'|'+parts[1]+'|'+parts[2]+'|'+negStr;
+          // Merge qty into correct key
+          const existing = invMap.get(correctKey) || 0;
+          invMap.set(correctKey, existing + qty);
+          toDelete.push(key);
+          totalMerged += qty;
+          totalDeleted++;
+          console.log(`🔧 CYL fix [${branch}]: merged ${qty} pcs from "${key}" → "${correctKey}"`);
+        }
+      }
+    });
+    toDelete.forEach(k => invMap.delete(k));
+    if(toDelete.length > 0){
+      data.i = [...invMap];
+      localStorage.setItem(BK, JSON.stringify(data));
+    }
+  });
+  localStorage.setItem(FLAG, '1');
+  if(totalDeleted > 0){
+    console.log(`✅ CYL fix complete: merged ${totalMerged} units across ${totalDeleted} bad keys`);
+  } else {
+    console.log('✅ CYL fix: no positive-CYL keys found');
+  }
 })();
 
 bootApp();
