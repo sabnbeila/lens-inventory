@@ -2217,7 +2217,7 @@ window.populateTxKeys = () => {
     : '<option value="">— no stock of this type —</option>';
 };
 
-window.executeTransfer = () => {
+window.executeTransfer = async () => {
   const fromId = document.getElementById('txFrom').value;
   const toId   = document.getElementById('txTo').value;
   const key    = document.getElementById('txKey').value;
