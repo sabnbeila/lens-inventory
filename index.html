@@ -643,6 +643,31 @@ input.compact{margin-bottom:0;padding:10px;font-size:13px}
 
       <!-- ── TAB: STOCK COMPARE ── -->
       <div id="atab-content-stock" style="display:none">
+        <!-- ── PHYSICAL STOCK ADJUSTMENT (Admin only) ── -->
+        <div style="background:rgba(0,240,255,0.05);border:1px solid rgba(0,240,255,0.2);border-radius:12px;padding:14px;margin-bottom:16px">
+          <div style="font-family:var(--display);font-size:15px;color:var(--cyan);margin-bottom:4px;letter-spacing:.5px">📦 SET PHYSICAL STOCK COUNT</div>
+          <div style="font-family:var(--mono);font-size:9px;color:var(--text2);margin-bottom:12px">Override any lens quantity with the actual physical count. Logs as an ADJUSTMENT.</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+            <div style="flex:1;min-width:120px">
+              <div style="font-family:var(--mono);font-size:9px;color:var(--text2);margin-bottom:4px">BRANCH</div>
+              <select id="adjBranch" style="width:100%;padding:8px;background:rgba(6,9,20,0.85);border:1px solid rgba(255,255,255,0.12);color:var(--text);border-radius:8px;font-family:var(--mono);font-size:11px;outline:none"></select>
+            </div>
+            <div style="flex:2;min-width:180px">
+              <div style="font-family:var(--mono);font-size:9px;color:var(--text2);margin-bottom:4px">LENS KEY (e.g. Single|sss_mar|-2.50|-1.75)</div>
+              <input id="adjKey" type="text" placeholder="Type or paste lens key…" style="width:100%;padding:8px;background:rgba(6,9,20,0.85);border:1px solid rgba(255,255,255,0.12);color:var(--text);border-radius:8px;font-family:var(--mono);font-size:11px;outline:none"/>
+            </div>
+            <div style="min-width:80px">
+              <div style="font-family:var(--mono);font-size:9px;color:var(--text2);margin-bottom:4px">REAL QTY</div>
+              <input id="adjQty" type="number" min="0" value="0" style="width:80px;padding:8px;background:rgba(6,9,20,0.85);border:1px solid rgba(255,255,255,0.12);color:var(--text);border-radius:8px;font-family:var(--mono);font-size:13px;outline:none;text-align:center"/>
+            </div>
+            <div style="flex:1;min-width:120px">
+              <div style="font-family:var(--mono);font-size:9px;color:var(--text2);margin-bottom:4px">REASON</div>
+              <input id="adjReason" type="text" placeholder="Physical count" style="width:100%;padding:8px;background:rgba(6,9,20,0.85);border:1px solid rgba(255,255,255,0.12);color:var(--text);border-radius:8px;font-family:var(--mono);font-size:11px;outline:none"/>
+            </div>
+            <button onclick="doPhysicalAdj()" class="adm-save-btn" style="background:rgba(0,240,255,0.12);border-color:rgba(0,240,255,0.35);color:var(--cyan)">✓ SET</button>
+          </div>
+          <div id="adjMsg" style="display:none;margin-top:8px;font-family:var(--mono);font-size:10px"></div>
+        </div>
         <div style="font-family:var(--mono);font-size:9px;color:var(--text2);letter-spacing:1px;margin-bottom:10px">Compare stock levels side-by-side across all branches. Filter by lens type.</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px" id="adm-typeFilter">
           <button class="adm-filter-btn active" id="aftype-all"         onclick="setAdmTypeFilter('all')">All Types</button>
@@ -1492,20 +1517,25 @@ function currentUserName(){
 }
 
 function getPasswords(){
+  // Hardcode all known branch IDs so this works even before BRANCHES array is populated
+  const def = { admin:'0000', twese:'0000', nyubwa:'0000', mengo:'0000', mbarara:'0000' };
+  // Also add any dynamically configured branches
+  if(BRANCHES.length) BRANCHES.forEach(b=>{ if(!def[b.id]) def[b.id]='0000'; });
   const saved = localStorage.getItem(PW_KEY);
-  const def={admin:'0000'};
-  BRANCHES.forEach(b=>def[b.id]='0000');
   if(!saved){
     localStorage.setItem(PW_KEY, JSON.stringify(def));
     return def;
   }
-  // Merge: saved values win, but missing keys fall back to 0000
-  const merged = Object.assign({}, def, JSON.parse(saved));
-  // If admin was missing from saved, persist the fix immediately
-  if(!JSON.parse(saved).hasOwnProperty('admin')){
-    localStorage.setItem(PW_KEY, JSON.stringify(merged));
+  try {
+    const parsed = JSON.parse(saved);
+    // Merge: saved values win, defaults fill missing keys
+    const merged = Object.assign({}, def, parsed);
+    return merged;
+  } catch(e){
+    // Corrupt data — reset to defaults
+    localStorage.setItem(PW_KEY, JSON.stringify(def));
+    return def;
   }
-  return merged;
 }
 function savePasswords(pw){ localStorage.setItem(PW_KEY, JSON.stringify(pw)); }
 function escapeHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
@@ -1579,37 +1609,30 @@ window.doLogin = () => {
   // Branch user login
   const users = getUsersForBranch(branch);
   if(users.length > 0){
-    // User-based login
     const userId = document.getElementById('loginUser').value;
-    if(!userId){ errEl.textContent='⚠ Please select your name.'; errEl.style.display='block'; return; }
-    const user = users.find(u => u.id === userId);
-    if(!user){ errEl.textContent='⚠ User not found.'; errEl.style.display='block'; return; }
-    if(user.password !== pw){
-      errEl.textContent='❌ Incorrect password. Please try again.';
-      errEl.style.display='block';
-      document.getElementById('loginPw').value='';
-      document.getElementById('loginPw').focus();
+    // If no user selected, fall through to branch password
+    if(userId){
+      const user = users.find(u => u.id === userId);
+      if(!user){ errEl.textContent='⚠ User not found.'; errEl.style.display='block'; return; }
+      if(user.password !== pw){
+        errEl.textContent='❌ Incorrect password. Please try again.';
+        errEl.style.display='block';
+        document.getElementById('loginPw').value='';
+        document.getElementById('loginPw').focus();
+        return;
+      }
+      if(fbReady){ fbDb.ref(`users/${userId}`).update({ lastActive: new Date().toISOString() }); }
+      currentBranch = branch;
+      currentUser = { id: user.id, name: user.name, branchId: branch };
+      adminViewingBranch = null;
+      localStorage.setItem(SESSION_KEY, JSON.stringify({branchId:branch,userId:user.id,userName:user.name}));
+      document.getElementById('loginScreen').style.display='none';
+      onBranchLogin(branch);
       return;
     }
-    // Update last active in Firebase directly
-    if(fbReady){
-      fbDb.ref(`users/${userId}`).update({ lastActive: new Date().toISOString() });
-    }
-    // Also update local cache
-    const allUsers = _usersCache;
-    const idx = allUsers.findIndex(u => u.id === userId);
-    if(idx>=0) allUsers[idx].lastActive = new Date().toISOString();
-
-    currentBranch = branch;
-    currentUser = { id: user.id, name: user.name, branchId: branch };
-    adminViewingBranch = null;
-    localStorage.setItem(SESSION_KEY, JSON.stringify({branchId:branch,userId:user.id,userName:user.name}));
-    document.getElementById('loginScreen').style.display='none';
-    onBranchLogin(branch);
-    return;
   }
 
-  // Fallback: branch-level password (for branches with no users configured)
+  // Branch-level password fallback (no users configured, or no user selected)
   const passwords = getPasswords();
   if(passwords[branch] !== pw){
     errEl.textContent='❌ Incorrect password. Please try again.';
@@ -1634,6 +1657,7 @@ window.emergencyResetPasswords = () => {
   alert('✅ All passwords reset to 0000.\n\nYou can now log in with password: 0000');
 };
 window.doLogout = () => {
+  detachBranchListeners();
   currentBranch = null;
   currentUser = null;
   adminViewingBranch = null;
@@ -1665,43 +1689,22 @@ function onBranchLogin(branchId){
   document.getElementById('branchBadge').style.borderColor = b.color.replace('var(--','').replace(')','');
   // Show admin button only for admin
   document.getElementById('adminMenuBtn').style.display = branchId==='admin'?'block':'none';
-  // Load correct inventory from localStorage first (instant)
+  // Load correct inventory — loadBranch attaches Firebase real-time listeners
   loadBranch(branchId==='admin' ? null : branchId);
   renderStats();
   go('menu');
   if(branchId==='admin') renderAdminPanel();
   // Update sync badge
   setTimeout(updateSyncBtnIdle, 100);
-  // ── AUTO-LOAD FROM CLOUD after login ──
-  if(fbReady && branchId !== 'admin'){
-    // Pull latest stock for this branch silently
-    pullBranchStock(branchId).then(()=>{
-      renderStats();
-      if(typeof renderMatrix==='function') renderMatrix();
-      updateSyncBtnIdle();
-    }).catch(e => console.warn('Auto cloud load failed:', e));
-  } else if(fbReady && branchId === 'admin'){
-    // Admin: pull all branches in background
+  // Admin: pre-load all branch caches for overview stats
+  if(branchId === 'admin'){
     adminPullAll().catch(e => console.warn('Admin cloud pull failed:', e));
-  } else if(!fbReady){
-    // Firebase not ready yet — init then pull
-    initFirebase().then(ok => {
-      if(!ok) return;
-      if(branchId !== 'admin'){
-        pullBranchStock(branchId).then(()=>{
-          renderStats();
-          if(typeof renderMatrix==='function') renderMatrix();
-          updateSyncBtnIdle();
-        }).catch(()=>{});
-      } else {
-        adminPullAll().catch(()=>{});
-      }
-    });
   }
 }
 
 // ── ADMIN VIEWS A BRANCH ──
 window.adminViewBranch = (branchId) => {
+  detachBranchListeners();
   adminViewingBranch = branchId;
   const b = branchInfo(branchId);
   document.getElementById('topBranchSub').textContent = `ADMIN VIEWING · ${b.label.toUpperCase()}`;
@@ -1733,17 +1736,7 @@ window.showBranchInfo = () => {
 // clicking badge shows nothing special for branch staff
 
 // ══════════════════════════════════════════════
-// BRANCH STORAGE (load/save per branch)
-// ══════════════════════════════════════════════
-function loadBranch(branchId){
-  if(!branchId){ inv=new Map(); logs=[]; renderStats(); return; }
-  const key = branchStorageKey(branchId);
-  const d = JSON.parse(localStorage.getItem(key)||'{}');
-  inv  = d.i ? new Map(d.i) : new Map();
-  logs = d.l || [];
-  renderStats();
-}
-
+// BRANCH STORAGE — loadBranch defined in Firebase-First Persist Engine above
 // ══════════════════════════════════════════════
 // ADMIN DASHBOARD
 // ══════════════════════════════════════════════
@@ -1840,7 +1833,7 @@ function renderAdminTabContent(){
 // Populate all branch selects in admin panel
 function populateAdmSelects(){
   const cfg = getBranchConfig();
-  ['txFrom','txTo','alertBranch','rptBranch'].forEach(id=>{
+  ['txFrom','txTo','alertBranch','rptBranch','adjBranch'].forEach(id=>{
     const el = document.getElementById(id); if(!el) return;
     const hasAll = ['alertBranch','rptBranch'].includes(id);
     el.innerHTML = hasAll ? '<option value="all">All Branches</option>' : '';
@@ -1848,17 +1841,98 @@ function populateAdmSelects(){
   });
 }
 
+// ── Physical Stock Adjustment ──
+window.doPhysicalAdj = opGuard(async () => {
+  const branchId = document.getElementById('adjBranch')?.value;
+  const key      = (document.getElementById('adjKey')?.value||'').trim();
+  const qty      = parseInt(document.getElementById('adjQty')?.value||'0');
+  const reason   = (document.getElementById('adjReason')?.value||'Physical Stock Count').trim();
+  const msgEl    = document.getElementById('adjMsg');
+
+  const showMsg = (txt, color) => {
+    msgEl.textContent = txt; msgEl.style.color = color||'var(--cyan)'; msgEl.style.display='block';
+    setTimeout(()=>{ msgEl.style.display='none'; }, 4000);
+  };
+
+  if(!branchId)            { showMsg('⚠ Select a branch','var(--amber)'); return; }
+  if(!key)                 { showMsg('⚠ Enter a lens key','var(--amber)'); return; }
+  if(isNaN(qty)||qty < 0) { showMsg('⚠ Enter a valid quantity (0 or more)','var(--amber)'); return; }
+  if(!fbReady)             { showMsg('⚠ Offline — cannot adjust','var(--red)'); return; }
+
+  // Temporarily override active branch for setPhysicalStock
+  const prevAdmin = adminViewingBranch;
+  adminViewingBranch = branchId;
+  await setPhysicalStock(key, qty, reason);
+  adminViewingBranch = prevAdmin;
+
+  showMsg(`✓ ${key.split('|').slice(2).join('/')} set to ${qty} pcs in ${branchId}`, 'var(--green)');
+  document.getElementById('adjKey').value = '';
+  document.getElementById('adjQty').value = '0';
+
+  // Refresh cache for this branch
+  try {
+    const snap = await fbDb.ref(`branches/${branchId}/stock`).get();
+    const val  = snap.val()||{};
+    const bMap = new Map();
+    for(const [ek, q] of Object.entries(val)){ if(q>0) bMap.set(decodeKey(ek), q); }
+    _branchInvCache[branchId] = bMap;
+  } catch(e){}
+  renderStockCompare();
+});
+
 // ── OVERVIEW ──
 function getBranchStats(branchId){
-  const key = branchStorageKey(branchId);
-  const d = JSON.parse(localStorage.getItem(key)||'{}');
-  const bInv = d.i ? new Map(d.i) : new Map();
-  let units=0, low=0, skus=0;
-  bInv.forEach((q,k)=>{ if(q>0){skus++;units+=q;if(q<4)low++;} });
-  return { skus, units, low, logs:(d.l||[]).length };
+  // If this is the currently loaded branch, use live in-memory inv
+  if(branchId === activeBranchId()){
+    let units=0, low=0, skus=0;
+    inv.forEach((q)=>{ if(q>0){skus++;units+=q;if(q<4)low++;} });
+    return { skus, units, low, logs: logs.length };
+  }
+  // For other branches, use cached Firebase data stored in _branchStatsCache
+  const cached = _branchStatsCache[branchId];
+  if(cached) return cached;
+  return { skus:0, units:0, low:0, logs:0 };
+}
+
+// Cache of branch stats pulled from Firebase for non-active branches
+const _branchStatsCache = {};
+// Cache of full inventory Maps for non-active branches (used by admin compare/alerts)
+const _branchInvCache = {};
+
+// Pull stats for all branches from Firebase (called by admin overview)
+async function pullAllBranchStats(){
+  if(!fbReady) return;
+  const cfg = getBranchConfig();
+  await Promise.all(cfg.map(async b => {
+    try {
+      const snap = await fbDb.ref(`branches/${b.id}/stock`).get();
+      const val = snap.val() || {};
+      let units=0, low=0, skus=0;
+      const bMap = new Map();
+      for(const [encodedKey, qty] of Object.entries(val)){
+        const realKey = decodeKey(encodedKey);
+        if(qty>0){
+          skus++; units+=qty;
+          if(qty<4) low++;
+          bMap.set(realKey, qty);
+        }
+      }
+      _branchStatsCache[b.id] = { skus, units, low, logs: 0 };
+      _branchInvCache[b.id]   = bMap;
+    } catch(e){ /* branch may not exist yet */ }
+  }));
 }
 
 function renderAdmOverview(){
+  // Pull fresh stats from Firebase then render
+  if(fbReady){
+    pullAllBranchStats().then(()=>_renderAdmOverviewUI());
+  } else {
+    _renderAdmOverviewUI();
+  }
+}
+
+function _renderAdmOverviewUI(){
   const cfg = getBranchConfig();
   let netUnits=0, netSkus=0, netLow=0;
   const COLORS = ['#6ea8fe','#00e87a','#00d4ff','#ffa340','#b06fff','#ff3b4e','#f5c518'];
@@ -1907,10 +1981,11 @@ function renderStockCompare(){
   const el = document.getElementById('adm-stockCompare');
   if(!el) return;
 
-  // Build per-branch inventory maps
+  // Build per-branch inventory maps from Firebase cache
+  // Active branch uses live in-memory inv; others use _branchInvCache
   const branchMaps = cfg.map(b=>{
-    const d = JSON.parse(localStorage.getItem(branchStorageKey(b.id))||'{}');
-    return { b, inv: d.i ? new Map(d.i) : new Map() };
+    if(b.id === activeBranchId()) return { b, inv };
+    return { b, inv: _branchInvCache[b.id] || new Map() };
   });
 
   // Collect all keys across all branches, filtered by type
@@ -2001,8 +2076,7 @@ function renderAdmAlerts(){
 
   const alerts = [];
   branches.forEach(b=>{
-    const d = JSON.parse(localStorage.getItem(branchStorageKey(b.id))||'{}');
-    const bInv = d.i ? new Map(d.i) : new Map();
+    const bInv = b.id===activeBranchId() ? inv : (_branchInvCache[b.id]||new Map());
     bInv.forEach((q,k)=>{
       if(q>threshold) return;
       const parts=k.split('|');
@@ -2061,8 +2135,7 @@ window.exportAlerts = () => {
   const cfg = getBranchConfig();
   let text = `PLUS ONE OPTICAL — LOW STOCK ALERTS\n${new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}\nThreshold: ≤${threshold} pcs\n${'─'.repeat(40)}\n\n`;
   cfg.forEach(b=>{
-    const d = JSON.parse(localStorage.getItem(branchStorageKey(b.id))||'{}');
-    const bInv = d.i ? new Map(d.i) : new Map();
+    const bInv = b.id===activeBranchId() ? inv : (_branchInvCache[b.id]||new Map());
     const items=[];
     bInv.forEach((q,k)=>{
       if(q>threshold) return;
@@ -2081,9 +2154,19 @@ window.exportAlerts = () => {
 // ══════════════════════════════════════════════
 // TAB: STOCK TRANSFERS
 // ══════════════════════════════════════════════
-const TX_LOG_KEY = 'spec_tx_log_v1';
-function getTransferLog(){ return JSON.parse(localStorage.getItem(TX_LOG_KEY)||'[]'); }
-function saveTransferLog(log){ localStorage.setItem(TX_LOG_KEY, JSON.stringify(log)); }
+const TX_LOG_KEY = 'spec_tx_log_v1'; // kept for legacy reads only
+let _transferLogCache = [];
+
+async function getTransferLog(){
+  if(!fbReady) return _transferLogCache;
+  try {
+    const snap = await fbDb.ref('transferLog').orderByChild('date').limitToLast(100).get();
+    if(!snap.exists()) return [];
+    _transferLogCache = Object.values(snap.val()||{}).sort((a,b)=>b.date.localeCompare(a.date));
+    return _transferLogCache;
+  } catch(e){ return _transferLogCache; }
+}
+function saveTransferLog(log){ /* no-op — transfers now write directly to Firebase */ }
 
 function renderAdmTransfers(){
   // Populate FROM dropdown — only Main Branch (twese) and Nyubwa Kubwa (nyubwa) may send
@@ -2110,8 +2193,7 @@ window.populateTxKeys = () => {
   const type   = document.getElementById('txType')?.value||'Single';
   const sel    = document.getElementById('txKey'); if(!sel) return;
   if(!fromId){ sel.innerHTML='<option>— select FROM branch first —</option>'; return; }
-  const d = JSON.parse(localStorage.getItem(branchStorageKey(fromId))||'{}');
-  const bInv = d.i ? new Map(d.i) : new Map();
+  const bInv = fromId===activeBranchId() ? inv : (_branchInvCache[fromId]||new Map());
   const keys=[];
   bInv.forEach((q,k)=>{
     if(q<=0) return;
@@ -2142,48 +2224,77 @@ window.executeTransfer = () => {
   if(!key||key.startsWith('—')){ show('⚠ Select a prescription','var(--red)'); return; }
   if(qty<1){ show('⚠ Qty must be at least 1','var(--red)'); return; }
 
-  // Deduct from source
-  const fromData = JSON.parse(localStorage.getItem(branchStorageKey(fromId))||'{}');
-  const fromInv  = fromData.i ? new Map(fromData.i) : new Map();
-  const fromQty  = fromInv.get(key)||0;
-  if(qty > fromQty){ show(`⚠ Source only has ${fromQty} pcs`,'var(--red)'); return; }
-  fromInv.set(key, fromQty - qty);
-  fromData.i = [...fromInv];
-  // Add transfer log entry to source branch logs
-  const fromLogs = fromData.l||[];
-  const parts=key.split('|');
-  const presb=isPresb(parts[0]);
-  const rx=presb?`${parts[3]} ADD${parts[4]}`:`${parts[2]}/${parts[3]}`;
-  const toB = getBranchConfig().find(b=>b.id===toId)||{label:toId};
-  fromLogs.unshift({d:new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'short'}),t:new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}),f:'OUT',l:key,q:qty,r:`Transfer → ${toB.label}`,tp:parts[0],ct:(COATINGS.find(c=>c.id===parts[1])||{label:parts[1]}).label,ey:presb?parts[2]:'—',user:currentUserName()});
-  fromData.l = fromLogs;
-  localStorage.setItem(branchStorageKey(fromId), JSON.stringify(fromData));
+  if(!fbReady){ show('⚠ Offline — cannot transfer','var(--red)'); return; }
 
-  // Add to destination
-  const toData = JSON.parse(localStorage.getItem(branchStorageKey(toId))||'{}');
-  const toInv  = toData.i ? new Map(toData.i) : new Map();
-  toInv.set(key, (toInv.get(key)||0) + qty);
-  toData.i = [...toInv];
-  const toLogs = toData.l||[];
-  const fromB = getBranchConfig().find(b=>b.id===fromId)||{label:fromId};
-  toLogs.unshift({d:new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'short'}),t:new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}),f:'IN',l:key,q:qty,r:`Transfer ← ${fromB.label}`,tp:parts[0],ct:(COATINGS.find(c=>c.id===parts[1])||{label:parts[1]}).label,ey:presb?parts[2]:'—',user:currentUserName()});
-  toData.l = toLogs;
-  localStorage.setItem(branchStorageKey(toId), JSON.stringify(toData));
+  const parts  = key.split('|');
+  const presb  = isPresb(parts[0]);
+  const rx     = presb ? `${parts[3]} ADD${parts[4]}` : `${parts[2]}/${parts[3]}`;
+  const coat   = (COATINGS.find(c=>c.id===parts[1])||{label:parts[1]}).label;
+  const typeLabel = parts[0];
+  const eyeLabel  = presb ? parts[2] : '—';
+  const fromB  = getBranchConfig().find(b=>b.id===fromId)||{label:fromId};
+  const toB    = getBranchConfig().find(b=>b.id===toId)||{label:toId};
+  const eKey   = encodeKey(key);
+  const n      = new Date();
+  const dateStr = n.toLocaleDateString('en-GB',{day:'2-digit',month:'short'});
+  const timeStr = n.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
 
-  // Save transfer audit log
-  const txLog = getTransferLog();
-  txLog.unshift({ date:new Date().toISOString(), fromId, toId, key, qty, reason, rx,
-    coat:(COATINGS.find(c=>c.id===parts[1])||{label:parts[1]}).label, type:parts[0], user:currentUserName() });
-  saveTransferLog(txLog);
+  // ── Step 1: Deduct from source via transaction ──
+  const fromStockRef = fbDb.ref(`branches/${fromId}/stock/${eKey}`);
+  let committedFromQty = 0;
+  try {
+    const result = await fromStockRef.transaction(current => {
+      const cur = current || 0;
+      if(cur < qty) return; // abort — not enough stock
+      committedFromQty = cur - qty;
+      return committedFromQty;
+    });
+    if(!result.committed){
+      const snap = await fromStockRef.get();
+      const avail = snap.val() || 0;
+      show(`⚠ Source only has ${avail} pcs available`,'var(--red)');
+      return;
+    }
+  } catch(e){
+    show('⚠ Transfer failed — check connection','var(--red)'); return;
+  }
+
+  // ── Step 2: Add to destination via transaction ──
+  try {
+    await fbDb.ref(`branches/${toId}/stock/${eKey}`).transaction(current => {
+      return (current || 0) + qty;
+    });
+  } catch(e){
+    // Rollback source deduction
+    await fromStockRef.transaction(cur => (cur||0) + qty).catch(()=>{});
+    show('⚠ Transfer failed on destination — rolled back','var(--red)'); return;
+  }
+
+  // ── Step 3: Write logs to both branches ──
+  const baseLog = { ts:n.getTime(), iso:n.toISOString(), d:dateStr, t:timeStr,
+    l:key, q:qty, tp:typeLabel, ct:coat, ey:eyeLabel, user:currentUserName() };
+  await Promise.all([
+    fbDb.ref(`branches/${fromId}/logs`).push({...baseLog, f:'OUT', r:`Transfer → ${toB.label}`, afterQty: committedFromQty }),
+    fbDb.ref(`branches/${toId}/logs`).push({...baseLog, f:'IN',  r:`Transfer ← ${fromB.label}`})
+  ]).catch(e => console.warn('Transfer log write failed:', e));
+
+  // ── Step 4: Save transfer audit log to Firebase ──
+  await fbDb.ref('transferLog').push({
+    date: n.toISOString(), fromId, toId, key, qty, reason, rx, coat, type: typeLabel, user: currentUserName()
+  }).catch(()=>{});
+
+  // Update local cache for from-branch if it's loaded
+  if(fromId === activeBranchId()) inv.set(key, Math.max(0, (inv.get(key)||0) - qty));
 
   show(`✓ Transferred ${qty} pcs of ${rx} from ${fromB.label} to ${toB.label}`,'var(--green)');
   populateTxKeys();
   renderAdmTransferLog();
 };
 
-function renderAdmTransferLog(){
+async function renderAdmTransferLog(){
   const el = document.getElementById('adm-transferLog'); if(!el) return;
-  const log = getTransferLog();
+  el.innerHTML=`<div style="text-align:center;padding:12px;color:var(--text2);font-family:var(--mono);font-size:10px">Loading…</div>`;
+  const log = await getTransferLog();
   const cfg = getBranchConfig();
   const bName = id => (cfg.find(b=>b.id===id)||{label:id,icon:'📍'});
 
@@ -2228,8 +2339,8 @@ function renderAdmReports(){
   // Gather all OUT logs
   const allOuts = [];
   branches.forEach(b=>{
-    const d = JSON.parse(localStorage.getItem(branchStorageKey(b.id))||'{}');
-    (d.l||[]).forEach(log=>{
+    const bLogs = b.id===activeBranchId() ? logs : [];
+    bLogs.forEach(log=>{
       if(log.f!=='OUT') return;
       if(cutoff){
         const parts=log.d.split(' ');
@@ -2374,8 +2485,8 @@ window.exportReport = () => {
   text += `Generated: ${new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}\n`;
   text += `${'─'.repeat(40)}\n\n`;
   cfg.forEach(b=>{
-    const d = JSON.parse(localStorage.getItem(branchStorageKey(b.id))||'{}');
-    const outs = (d.l||[]).filter(l=>l.f==='OUT');
+    const bLogs2 = b.id===activeBranchId() ? logs : [];
+    const outs = bLogs2.filter(l=>l.f==='OUT');
     const total = outs.reduce((s,l)=>s+l.q,0);
     text += `${b.icon} ${b.label}: ${total} pcs dispensed (${outs.length} transactions)\n`;
   });
@@ -2395,8 +2506,7 @@ function renderAdmOrders(){
   const needed = new Map(); // key → { totalCurrent, branches: [{b, qty}], needed }
 
   cfg.forEach(b=>{
-    const d = JSON.parse(localStorage.getItem(branchStorageKey(b.id))||'{}');
-    const bInv = d.i ? new Map(d.i) : new Map();
+    const bInv = b.id===activeBranchId() ? inv : (_branchInvCache[b.id]||new Map());
     bInv.forEach((q,k)=>{
       if(q>=threshold) return;
       if(!needed.has(k)) needed.set(k, { current:0, branches:[] });
@@ -2480,8 +2590,7 @@ window.exportPO = () => {
 
   const needed = new Map();
   cfg.forEach(b=>{
-    const d = JSON.parse(localStorage.getItem(branchStorageKey(b.id))||'{}');
-    const bInv = d.i ? new Map(d.i) : new Map();
+    const bInv = b.id===activeBranchId() ? inv : (_branchInvCache[b.id]||new Map());
     bInv.forEach((q,k)=>{ if(q<threshold){ if(!needed.has(k))needed.set(k,0); needed.set(k,needed.get(k)+q); }});
   });
 
@@ -2570,8 +2679,8 @@ window.downloadReportPDF = () => {
 
   const allOuts=[];
   branches.forEach(b=>{
-    const d=JSON.parse(localStorage.getItem(branchStorageKey(b.id))||'{}');
-    (d.l||[]).forEach(log=>{
+    const bLogs = b.id===activeBranchId() ? logs : [];
+    bLogs.forEach(log=>{
       if(log.f!=='OUT') return;
       if(cutoff){
         const p=log.d.split(' ');
@@ -2662,8 +2771,7 @@ window.downloadPOPDF = () => {
   const needed = new Map();
 
   cfg.forEach(b=>{
-    const d=JSON.parse(localStorage.getItem(branchStorageKey(b.id))||'{}');
-    const bInv=d.i?new Map(d.i):new Map();
+    const bInv = b.id===activeBranchId() ? inv : (_branchInvCache[b.id]||new Map());
     bInv.forEach((q,k)=>{
       if(q>=threshold) return;
       if(!needed.has(k)) needed.set(k,{current:0,branches:[]});
@@ -2897,13 +3005,7 @@ window.downloadCustomerPDF = () => {
   const b = branchInfo(bid) || {label: bid, icon: '📍'};
 
   // Gather all OUT logs
-  let source = [...logs];
-  try {
-    const arch = JSON.parse(localStorage.getItem(branchStorageKey(bid)+'_arch')||'[]');
-    if(arch.length) source = [...source, ...arch];
-  } catch(e){}
-
-  const outLogs = source.filter(l => l.f==='OUT' && l.r && l.r.trim() && l.r!=='Manual Out');
+  const outLogs = logs.filter(l => l.f==='OUT' && l.r && l.r.trim() && l.r!=='Manual Out');
 
   if(!outLogs.length) {
     alert('No dispensing records found yet. Dispense some lenses first.');
@@ -3165,8 +3267,8 @@ window.renderAdmLiveView = function(){
   // Collect all transactions from all branches
   const allLogs = [];
   cfg.forEach(b=>{
-    const d = JSON.parse(localStorage.getItem(branchStorageKey(b.id))||'{}');
-    (d.l||[]).forEach(entry=>{ allLogs.push({...entry, branchId:b.id}); });
+    const bLogs = b.id===activeBranchId() ? logs : [];
+    bLogs.forEach(entry=>{ allLogs.push({...entry, branchId:b.id}); });
   });
 
   if(updateEl) updateEl.textContent = 'Updated: '+now.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
@@ -3198,10 +3300,9 @@ window.renderAdmLiveView = function(){
 
   // ── Per-branch cards ──
   gridEl.innerHTML = cfg.map(b=>{
-    const d   = JSON.parse(localStorage.getItem(branchStorageKey(b.id))||'{}');
-    const inv = d.i ? new Map(d.i) : new Map();
+    const bInv = b.id===activeBranchId() ? inv : (_branchInvCache[b.id]||new Map());
     let units=0, skus=0, lowCount=0;
-    inv.forEach((q,k)=>{ if(q>0){skus++;units+=q;if(q<4)lowCount++;} });
+    bInv.forEach((q,k)=>{ if(q>0){skus++;units+=q;if(q<4)lowCount++;} });
 
     // Branch logs (last 6)
     const bLogs = allLogs
@@ -3336,6 +3437,9 @@ window.deleteUser = async (id) => {
 
 // ── BOOT: check for existing session ──
 function bootApp(){
+  // ── Ensure passwords are seeded into localStorage immediately ──
+  getPasswords();
+
   // ── Init Firebase early so users sync before login ──
   initFirebase();
 
@@ -3372,6 +3476,7 @@ function bootApp(){
 // ══════════════════════════════════════════════
 // STATE
 // ══════════════════════════════════════════════
+// ── Core state variables ──
 let inv=new Map(), logs=[];
 let scanMode='IN', activeLens=null;
 let activeType='Single', activeCoating='cr39_clear', activeGridEye='BOTH';
@@ -3386,37 +3491,243 @@ function playBeep(ok){initAudio();const o=audioCtx.createOscillator(),g=audioCtx
 function vibrate(ok){if("vibrate"in navigator)navigator.vibrate(ok?80:[50,50,50]);}
 
 // ══════════════════════════════════════════════
-// PERSIST
+// FIREBASE-FIRST PERSIST ENGINE
 // ══════════════════════════════════════════════
-const LOG_LIMIT = 500; // max log entries kept in localStorage per branch
+// localStorage is used ONLY for:
+//   - session (login state)
+//   - passwords
+//   - branch config
+//   - theme
+//   - UI preferences
+// Stock data lives EXCLUSIVELY in Firebase.
+// In-memory `inv` and `logs` are populated by
+// real-time Firebase listeners — never written
+// to localStorage for stock.
+// ══════════════════════════════════════════════
 
-function save(){
+const LOG_LIMIT = 500;
+
+// ── Active real-time listeners (detached on branch switch) ──
+let _stockListener = null;
+let _logsListener  = null;
+
+// ── Button debounce guard — prevents double-submit ──
+let _opInProgress = false;
+function opGuard(fn){
+  return async function(...args){
+    if(_opInProgress) return;
+    _opInProgress = true;
+    // Visually disable all action buttons
+    document.querySelectorAll('.btn-in,.btn-out,.se-commit-btn,[onclick*="StockIn"],[onclick*="StockOut"],[onclick*="presbyStock"],[onclick*="Commit"]')
+      .forEach(b=>{ b._wasDisabled=b.disabled; b.disabled=true; });
+    try { await fn(...args); }
+    finally {
+      _opInProgress = false;
+      document.querySelectorAll('.btn-in,.btn-out,.se-commit-btn,[onclick*="StockIn"],[onclick*="StockOut"],[onclick*="presbyStock"],[onclick*="Commit"]')
+        .forEach(b=>{ b.disabled = b._wasDisabled||false; });
+    }
+  };
+}
+
+// ── Attach real-time Firebase listeners for a branch ──
+function attachBranchListeners(branchId){
+  if(!fbReady || !branchId || branchId==='admin') return;
+
+  // Detach old listeners
+  detachBranchListeners();
+
+  // ── Stock listener — instant UI update on any device's change ──
+  const stockRef = fbDb.ref(`branches/${branchId}/stock`);
+  _stockListener = stockRef.on('value', snap => {
+    const val = snap.val() || {};
+    inv = new Map();
+    for(const [encodedKey, qty] of Object.entries(val)){
+      if(qty > 0) inv.set(decodeKey(encodedKey), qty);
+    }
+    renderStats();
+    if(typeof renderMatrix==='function'){
+      const matrixScreen = document.getElementById('matrix');
+      if(matrixScreen && matrixScreen.classList.contains('active')) renderMatrix();
+    }
+    updateSyncBtnIdle();
+  }, err => {
+    console.error('Stock listener error:', err);
+    setSyncState('fail','OFFLINE');
+  });
+
+  // ── Logs listener — keeps transaction history in sync ──
+  const logsRef = fbDb.ref(`branches/${branchId}/logs`).orderByChild('ts').limitToLast(LOG_LIMIT);
+  _logsListener = logsRef.on('value', snap => {
+    const val = snap.val() || {};
+    // Convert Firebase object → array, newest first
+    logs = Object.values(val).sort((a,b) => (b.ts||0) - (a.ts||0));
+    // Refresh history panel if open
+    const histScreen = document.getElementById('history');
+    if(histScreen && histScreen.classList.contains('active')) renderHistory();
+    // Refresh admin liveview if open
+    if(typeof renderAdmLiveView==='function' && admTab==='liveview') renderAdmLiveView();
+  }, err => {
+    console.error('Logs listener error:', err);
+  });
+}
+
+function detachBranchListeners(){
+  if(_stockListener && fbDb){
+    const bid = activeBranchId();
+    if(bid && bid!=='admin') fbDb.ref(`branches/${bid}/stock`).off('value', _stockListener);
+  }
+  if(_logsListener && fbDb){
+    const bid = activeBranchId();
+    if(bid && bid!=='admin') fbDb.ref(`branches/${bid}/logs`).off('value', _logsListener);
+  }
+  _stockListener = null;
+  _logsListener  = null;
+}
+
+// ── Load branch: attach real-time listeners (replaces localStorage read) ──
+function loadBranch(branchId){
+  detachBranchListeners();
+  inv = new Map();
+  logs = [];
+  renderStats();
+  if(!branchId || branchId==='admin') return;
+
+  if(fbReady){
+    attachBranchListeners(branchId);
+  } else {
+    // Firebase not ready yet — will attach after initFirebase() completes
+    initFirebase().then(ok => {
+      if(ok) attachBranchListeners(branchId);
+    });
+  }
+}
+
+// ── Core stock update — uses Firebase transaction (SAFE, no double-count) ──
+async function updateInventory(key, qty, action, rec, ltype, coat, eye){
   const bid = activeBranchId();
-  if(!bid) return;
-  // ── Trim logs: keep newest LOG_LIMIT, archive the rest ──
-  let trimmed = logs;
-  if(logs.length > LOG_LIMIT){
-    trimmed = logs.slice(0, LOG_LIMIT);
-    // Save overflow to an archive key (capped at 2000 total archived)
-    const archKey = branchStorageKey(bid) + '_arch';
-    try {
-      const arch = JSON.parse(localStorage.getItem(archKey)||'[]');
-      const overflow = logs.slice(LOG_LIMIT);
-      const merged = [...overflow, ...arch].slice(0, 2000);
-      localStorage.setItem(archKey, JSON.stringify(merged));
-    } catch(e){ /* archive full — silently drop oldest */ }
-    logs = trimmed; // update in-memory logs too
+  if(!bid || bid==='admin'){
+    show('⚠ No branch selected','var(--amber)'); return;
   }
+  if(!fbReady){ await initFirebase(); }
+  if(!fbReady){ show('⚠ Offline — cannot update stock','var(--red)'); return; }
+
+  if(!ltype){ const p=key.split('|'); ltype=p[0]||''; coat=p[1]||''; eye=isPresb(ltype)?p[2]:'—'; }
+  const delta = action==='IN' ? qty : -qty;
+  const eKey  = encodeKey(key);
+
+  // ── TRANSACTION: atomic read-modify-write ──
+  // Firebase guarantees this runs atomically even with concurrent devices.
+  const stockRef = fbDb.ref(`branches/${bid}/stock/${eKey}`);
+  let finalQty = 0;
   try {
-    localStorage.setItem(branchStorageKey(bid), JSON.stringify({i:[...inv],l:trimmed}));
+    const result = await stockRef.transaction(current => {
+      const cur = current || 0;
+      if(action !== 'IN' && cur < qty){
+        // Abort transaction — not enough stock
+        return; // returning undefined aborts
+      }
+      return Math.max(0, cur + delta);
+    });
+    if(!result.committed){
+      // Transaction aborted (insufficient stock)
+      show(`⚠ Insufficient stock — transaction blocked`,'var(--red)');
+      return;
+    }
+    finalQty = result.snapshot.val() || 0;
+    // Update local in-memory map immediately (listener will also update it)
+    if(finalQty > 0) inv.set(key, finalQty);
+    else inv.delete(key);
   } catch(e){
-    // Storage quota hit — emergency: drop archive and retry with trimmed only
-    try {
-      localStorage.removeItem(branchStorageKey(bid)+'_arch');
-      localStorage.setItem(branchStorageKey(bid), JSON.stringify({i:[...inv],l:trimmed}));
-      console.warn('Storage quota: archive dropped for branch', bid);
-    } catch(e2){ console.error('Storage full — cannot save:', e2); }
+    console.error('Stock transaction failed:', e);
+    show('⚠ Write failed — check connection','var(--red)');
+    return;
   }
+
+  // ── Write log entry ──
+  const n   = new Date();
+  const logEntry = {
+    ts:   n.getTime(),
+    iso:  n.toISOString(),
+    d:    n.toLocaleDateString('en-GB',{day:'2-digit',month:'short'}),
+    t:    n.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}),
+    f:    action,
+    l:    key,
+    q:    qty,
+    r:    rec || '',
+    tp:   ltype,
+    ct:   coatLabel(coat),
+    ey:   eye || '—',
+    user: currentUserName(),
+    afterQty: finalQty
+  };
+  try {
+    await fbDb.ref(`branches/${bid}/logs`).push(logEntry);
+  } catch(e){
+    console.warn('Log write failed (non-critical):', e);
+  }
+
+  // Update branch meta
+  try {
+    await fbDb.ref(`branches/${bid}/meta`).update({
+      lastActive: n.toISOString(),
+      lastUser:   currentUserName()
+    });
+  } catch(e){ /* non-critical */ }
+
+  // Refresh UI
+  renderStats();
+  updateSyncBtnIdle();
+}
+
+// ── Admin: set physical stock (manual adjustment — overwrites Firebase) ──
+window.setPhysicalStock = async function(key, realQty, reason){
+  const bid = activeBranchId();
+  if(!bid || bid==='admin'){ show('⚠ Select a branch first','var(--amber)'); return; }
+  if(!fbReady){ await initFirebase(); }
+  if(!fbReady){ show('⚠ Offline','var(--red)'); return; }
+
+  const eKey = encodeKey(key);
+  const n    = new Date();
+
+  // Read current qty for log
+  const snap = await fbDb.ref(`branches/${bid}/stock/${eKey}`).get();
+  const prevQty = snap.val() || 0;
+  const diff    = realQty - prevQty;
+
+  // Direct set (not transaction — admin override is intentional)
+  await fbDb.ref(`branches/${bid}/stock/${eKey}`).set(realQty > 0 ? realQty : null);
+
+  // Log the adjustment
+  const parts = key.split('|');
+  await fbDb.ref(`branches/${bid}/logs`).push({
+    ts:   n.getTime(),
+    iso:  n.toISOString(),
+    d:    n.toLocaleDateString('en-GB',{day:'2-digit',month:'short'}),
+    t:    n.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}),
+    f:    'ADJUSTMENT',
+    l:    key,
+    q:    Math.abs(diff),
+    r:    reason || 'Physical Stock Count',
+    tp:   parts[0]||'',
+    ct:   coatLabel(parts[1]||''),
+    ey:   isPresb(parts[0]) ? (parts[2]||'—') : '—',
+    user: currentUserName(),
+    prevQty,
+    afterQty: realQty
+  });
+
+  // Update local in-memory map
+  if(realQty > 0) inv.set(key, realQty);
+  else inv.delete(key);
+
+  renderStats();
+  if(typeof renderMatrix==='function') renderMatrix();
+  show(`✓ Stock adjusted: ${key.split('|').slice(2).join(' / ')} → ${realQty} pcs`,'var(--cyan)');
+};
+
+// ── Legacy save() — now a no-op (Firebase handles persistence) ──
+// Kept so existing call sites don't throw errors.
+function save(){
   renderStats();
   updateSyncBtnIdle();
   updateStorageMonitor();
@@ -3427,7 +3738,7 @@ function getStorageUsage(){
     let total = 0;
     for(let i = 0; i < localStorage.length; i++){
       const k = localStorage.key(i);
-      total += (k.length + (localStorage.getItem(k)||'').length) * 2; // UTF-16
+      total += (k.length + (localStorage.getItem(k)||'').length) * 2;
     }
     return total;
   } catch(e){ return 0; }
@@ -3436,24 +3747,23 @@ function getStorageUsage(){
 function updateStorageMonitor(){
   const el = document.getElementById('storageMon');
   if(!el) return;
-  const used = getStorageUsage();
-  const limit = 5 * 1024 * 1024; // 5MB
-  const pct = Math.round((used / limit) * 100);
-  const kb = Math.round(used / 1024);
-  let color, icon;
-  if(pct < 50)     { color = 'var(--green)';  icon = '💾'; }
-  else if(pct < 75){ color = 'var(--amber)';  icon = '⚠️'; }
-  else             { color = 'var(--red)';     icon = '🔴'; }
-  el.title = `Storage: ${kb} KB used of ~5120 KB (${pct}%)`;
-  el.innerHTML = `<span style="font-size:9px">${icon}</span><span style="font-family:var(--mono);font-size:8px;color:${color}">${pct}%</span>`;
-  el.style.borderColor = pct >= 75 ? color : 'var(--border)';
+  // Show Firebase connection status instead of localStorage usage
+  if(fbReady){
+    el.title = 'Firebase: Connected';
+    el.innerHTML = `<span style="font-size:9px">☁</span><span style="font-family:var(--mono);font-size:8px;color:var(--green)">LIVE</span>`;
+    el.style.borderColor = 'var(--green)';
+  } else {
+    el.title = 'Firebase: Disconnected';
+    el.innerHTML = `<span style="font-size:9px">⚠</span><span style="font-family:var(--mono);font-size:8px;color:var(--red)">OFFLINE</span>`;
+    el.style.borderColor = 'var(--red)';
+  }
 }
+
 function load(){
   const bid = activeBranchId();
   if(!bid){ inv=new Map(); logs=[]; renderStats(); return; }
   loadBranch(bid);
 }
-
 // ══════════════════════════════════════════════
 // NAVIGATION
 // ══════════════════════════════════════════════
@@ -3591,18 +3901,18 @@ function safeCYL(inp){
   const raw=parseFloat(inp._snapped||snapCYL(inp.value||'0')||'0');
   return isNaN(raw)?0:(raw>0?-raw:raw);
 }
-window.manualStockIn=()=>{
+window.manualStockIn=opGuard(async()=>{
   const sphInp=document.getElementById('mSph');
   const cylInp=document.getElementById('mCyl');
   const sph=parseFloat(sphInp._snapped||snapSPH(sphInp.value)||'0');
   const cyl=safeCYL(cylInp);
   if(isNaN(sph)){show('⚠ Enter valid SPH','var(--amber)');return;}
   const qty=parseInt(document.getElementById('mQty').value)||1;
-  updateInventory(makeSVKey(activeType,activeCoating,sph,cyl),qty,'IN','Manual Entry',activeType,activeCoating,'—');
+  await updateInventory(makeSVKey(activeType,activeCoating,sph,cyl),qty,'IN','Manual Entry',activeType,activeCoating,'—');
   renderMatrix();
   show(`✓ +${qty} stocked in · SPH ${fmtSph(sph)} / CYL ${fmtCyl(cyl)}`,'var(--green)');
-};
-window.manualStockOut=()=>{
+});
+window.manualStockOut=opGuard(async()=>{
   const sphInp=document.getElementById('mSph');
   const cylInp=document.getElementById('mCyl');
   const sph=parseFloat(sphInp._snapped||snapSPH(sphInp.value)||'0');
@@ -3612,15 +3922,15 @@ window.manualStockOut=()=>{
   const key=makeSVKey(activeType,activeCoating,sph,cyl);
   const cur=inv.get(key)||0;
   if(qty>cur){
-    if(cur===0) show(`⚠ OUT OF STOCK · SPH ${fmtSph(sph)} / CYL ${fmtCyl(cyl)} has 0 units`,'var(--red)');
-    else show(`⚠ Only ${cur} pcs available. Cannot dispense ${qty}`,'var(--amber)');
+    if(cur===0) show(`⚠ OUT OF STOCK · SPH ${fmtSph(sph)} / CYL ${fmtCyl(cyl)}`,'var(--red)');
+    else show(`⚠ Only ${cur} pcs available`,'var(--amber)');
     return;
   }
-  updateInventory(key,qty,'OUT','Manual Out',activeType,activeCoating,'—');
+  await updateInventory(key,qty,'OUT','Manual Out',activeType,activeCoating,'—');
   renderMatrix();
-  show(`✓ −${qty} out · SPH ${fmtSph(sph)} / CYL ${fmtCyl(cyl)} · Remaining: ${(cur-qty)}`,'var(--red)');
-};
-window.presbyStockIn=()=>{
+  show(`✓ −${qty} out · SPH ${fmtSph(sph)} / CYL ${fmtCyl(cyl)} · Remaining: ${Math.max(0,cur-qty)}`,'var(--red)');
+});
+window.presbyStockIn=opGuard(async()=>{
   const sphInp=document.getElementById('pSph');
   const addInp=document.getElementById('pAdd');
   const sph=parseFloat(sphInp._snapped||snapPSPH(sphInp.value)||'0');
@@ -3628,11 +3938,11 @@ window.presbyStockIn=()=>{
   if(isNaN(sph)||isNaN(add)){show('⚠ Enter valid SPH and ADD','var(--amber)');return;}
   const qty=parseInt(document.getElementById('pQty').value)||1;
   const eye=document.getElementById('pEye').value;
-  updateInventory(makePresbKey(activeType,activeCoating,eye,sph,add),qty,'IN','Manual Entry',activeType,activeCoating,eye);
+  await updateInventory(makePresbKey(activeType,activeCoating,eye,sph,add),qty,'IN','Manual Entry',activeType,activeCoating,eye);
   renderMatrix();
   show(`✓ +${qty} stocked in · SPH ${fmtSph(sph)} ADD ${fmtAdd(add)} ${eye}`,'var(--green)');
-};
-window.presbyStockOut=()=>{
+});
+window.presbyStockOut=opGuard(async()=>{
   const sphInp=document.getElementById('pSph');
   const addInp=document.getElementById('pAdd');
   const sph=parseFloat(sphInp._snapped||snapPSPH(sphInp.value)||'0');
@@ -3643,34 +3953,21 @@ window.presbyStockOut=()=>{
   const key=makePresbKey(activeType,activeCoating,eye,sph,add);
   const cur=inv.get(key)||0;
   if(qty>cur){
-    if(cur===0) show(`⚠ OUT OF STOCK · ${eye} SPH ${fmtSph(sph)} ADD ${fmtAdd(add)} has 0 units`,'var(--red)');
+    if(cur===0) show(`⚠ OUT OF STOCK · ${eye} SPH ${fmtSph(sph)} ADD ${fmtAdd(add)}`,'var(--red)');
     else show(`⚠ Only ${cur} pcs available`,'var(--amber)');
     return;
   }
-  updateInventory(key,qty,'OUT','Manual Out',activeType,activeCoating,eye);
+  await updateInventory(key,qty,'OUT','Manual Out',activeType,activeCoating,eye);
   renderMatrix();
-  show(`✓ −${qty} out · ${eye} SPH ${fmtSph(sph)} ADD ${fmtAdd(add)} · Remaining: ${(cur-qty)}`,'var(--red)');
-};
+  show(`✓ −${qty} out · ${eye} SPH ${fmtSph(sph)} ADD ${fmtAdd(add)} · Remaining: ${Math.max(0,cur-qty)}`,'var(--red)');
+});
 
 // ══════════════════════════════════════════════
-// CORE INVENTORY UPDATE
+// STOCK OPERATION HANDLERS (async, Firebase-first)
 // ══════════════════════════════════════════════
-function updateInventory(key,qty,action,rec,ltype,coat,eye){
-  const cur=inv.get(key)||0;
-  inv.set(key,Math.max(0,cur+(action==='IN'?qty:-qty)));
-  if(!ltype){const p=key.split('|');ltype=p[0]||'';coat=p[1]||'';eye=isPresb(ltype)?p[2]:'—';}
-  const n=new Date();
-  logs.unshift({
-    d:n.toLocaleDateString('en-GB',{day:'2-digit',month:'short'}),
-    t:n.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}),
-    iso:n.toISOString(),
-    f:action,l:key,q:qty,r:rec,tp:ltype,ct:coatLabel(coat),ey:eye||'—',
-    user:currentUserName(),
-    syncId: genSyncId(),   // unique ID for dedup
-    synced: false          // will be true once pushed to Firebase
-  });
-  save();
-}
+// All stock operations are now async and write directly to Firebase.
+// The old synchronous updateInventory is replaced — this wrapper keeps
+// call-site compatibility for seBasketCommit and any other callers.
 
 // ══════════════════════════════════════════════
 // MATRIX RENDER
@@ -4783,24 +5080,31 @@ window.seBasketClear=()=>{
   renderBasket();
 };
 
-window.seBasketCommit=()=>{
+window.seBasketCommit=opGuard(async()=>{
   if(!seBasketItems.length){ seFeedback('⚠ Basket is empty','var(--amber)'); return; }
   const recipient=(document.getElementById('se-basket-recipient')?.value||'').trim()||'Unknown';
   const action = scanMode==='RETURN'?'IN':'OUT';
   const noteTag = scanMode==='RETURN'?` (Ret)`:'';
 
-  seBasketItems.forEach(item=>{
-    updateInventory(item.key, item.qty, action, recipient+noteTag, item.type, item.coat, item.eyeVal);
-  });
-  save(); renderStats();
+  let failed=0;
+  for(const item of seBasketItems){
+    try{
+      await updateInventory(item.key, item.qty, action, recipient+noteTag, item.type, item.coat, item.eyeVal);
+    } catch(e){ failed++; console.error('Basket item failed:',e); }
+  }
+  renderStats();
 
   const total=seBasketItems.reduce((s,i)=>s+i.qty,0);
   const count=seBasketItems.length;
-  seFeedback(`✓ Dispensed ${total} pcs (${count} lens${count!==1?'es':''}) to ${recipient}`,'var(--green)');
+  if(failed===0)
+    seFeedback(`✓ Dispensed ${total} pcs (${count} lens${count!==1?'es':''}) to ${recipient}`,'var(--green)');
+  else
+    seFeedback(`⚠ ${count-failed}/${count} items saved — ${failed} failed (check connection)`,'var(--amber)');
+
   seBasketItems=[];
   renderBasket();
   if(document.getElementById('se-basket-recipient')) document.getElementById('se-basket-recipient').value='';
-};
+});
 
 // ══════════════════════════════════════════════
 // CUSTOMER LEDGER
@@ -4821,12 +5125,7 @@ window.setHistTab=(tab)=>{
 function getAllOutLogs(){
   // Gather OUT logs from current branch logs + archive
   const bid=activeBranchId();
-  let source=[...logs];
-  try {
-    const arch=JSON.parse(localStorage.getItem(branchStorageKey(bid)+'_arch')||'[]');
-    if(arch.length) source=[...source,...arch];
-  } catch(e){}
-  return source.filter(l=>l.f==='OUT'||l.f==='IN'); // include returns too
+  return logs.filter(l=>l.f==='OUT'||l.f==='IN'); // returns too
 }
 
 function getRecipients(){
@@ -5225,13 +5524,6 @@ function filteredLogs(){
   // For 'all' date mode, merge in archived logs too
   let source = logs;
   if(histDateMode==='all'){
-    const bid = activeBranchId();
-    if(bid){
-      try{
-        const arch = JSON.parse(localStorage.getItem(branchStorageKey(bid)+'_arch')||'[]');
-        if(arch.length) source = [...logs, ...arch];
-      }catch(e){}
-    }
   }
   const rx=(document.getElementById('histRxSearch')||{}).value||'';
   const rxLower=rx.toLowerCase();
@@ -5301,31 +5593,40 @@ function renderHistory(){
 }
 
 // ── REVERSE TRANSACTION ──
-window.reverseTransaction=(idx)=>{
+window.reverseTransaction=opGuard(async(idx)=>{
   const entry=logs[idx];
   if(!entry||entry.reversed) return;
   const p=entry.l.split('|');
   const presb=isPresb(p[0]);
   const ll=presb&&p.length>=5?`${p[3]} ADD${p[4]}`:(p.length>=4?`${p[2]}/${p[3]}`:entry.l);
   const label=`${entry.tp||''} ${ll} × ${entry.q} (${entry.f})`;
-  if(!confirm(`Reverse this transaction?\n\n${label}\n\nA correction entry will be created and the original will be marked as reversed.\n\nContinue?`)) return;
-  const cur=inv.get(entry.l)||0;
-  inv.set(entry.l,Math.max(0,cur+(entry.f==='IN'?-entry.q:entry.q)));
-  entry.reversed=true;
+  if(!confirm(`Reverse this transaction?\n\n${label}\n\nA correction entry will be created.\n\nContinue?`)) return;
+
+  const bid = activeBranchId();
+  if(!bid || !fbReady){ show('⚠ Cannot reverse — not connected','var(--red)'); return; }
+
+  // Reverse action via Firebase transaction
+  const reverseAction = entry.f==='IN' ? 'OUT' : 'IN';
+  const delta = entry.f==='IN' ? -entry.q : entry.q;
+  const eKey = encodeKey(entry.l);
+
+  await fbDb.ref(`branches/${bid}/stock/${eKey}`).transaction(cur => Math.max(0,(cur||0)+delta));
+
+  // Log the reversal
   const n=new Date();
-  logs.unshift({
-    d:n.toLocaleDateString('en-GB',{day:'2-digit',month:'short'}),
-    t:n.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}),
-    iso:n.toISOString(),
-    f:entry.f==='IN'?'OUT':'IN',
-    l:entry.l,q:entry.q,
-    r:`Correction (reversed ${entry.d} ${entry.t})`,
-    tp:p[0]||'',ct:entry.ct,ey:entry.ey||'—',
-    user:currentUserName(),
-    reversed:true
+  await fbDb.ref(`branches/${bid}/logs`).push({
+    ts: n.getTime(), iso: n.toISOString(),
+    d: n.toLocaleDateString('en-GB',{day:'2-digit',month:'short'}),
+    t: n.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}),
+    f: reverseAction, l: entry.l, q: entry.q,
+    r: `Correction (reversed ${entry.d} ${entry.t})`,
+    tp: p[0]||'', ct: entry.ct, ey: entry.ey||'—',
+    user: currentUserName(), reversed: true
   });
-  save(); renderHistory(); renderStats();
-};
+
+  show(`✓ Transaction reversed`,'var(--cyan)');
+  renderStats();
+});
 
 // ── HISTORY PDF EXPORT ──
 window.exportHistoryPDF=()=>{
@@ -5386,17 +5687,23 @@ window.importBackup=(evt)=>{
 // ══════════════════════════════════════════════
 // RESET & CLOCK
 // ══════════════════════════════════════════════
-window.confirmResetData=()=>{
+window.confirmResetData=opGuard(async()=>{
   const bid=activeBranchId(); if(!bid){alert('No branch active.');return;}
   const b=branchInfo(bid);
   const answer=prompt(`⚠ DANGER ZONE\n\nThis permanently wipes ALL stock data and history for:\n${b?b.label:bid}\n\nAll inventory counts will go to zero. This CANNOT be undone.\n\nType DELETE to confirm:`);
   if(answer==='DELETE'){
-    localStorage.removeItem(branchStorageKey(bid));
+    if(!fbReady){ alert('Cannot reset — Firebase not connected.'); return; }
+    // Wipe Firebase stock and logs for this branch
+    await fbDb.ref(`branches/${bid}/stock`).remove();
+    await fbDb.ref(`branches/${bid}/logs`).remove();
+    await fbDb.ref(`branches/${bid}/meta`).update({
+      lastReset: new Date().toISOString(), resetBy: currentUserName()
+    });
     inv=new Map(); logs=[];
     renderStats(); renderHistory();
-    alert(`${b?b.label:bid} inventory has been reset.`);
+    alert(`${b?b.label:bid} inventory has been reset. All devices will update automatically.`);
   } else { alert('Reset cancelled. Nothing was changed.'); }
-};
+});
 window.resetData=window.confirmResetData;
 
 
@@ -5437,8 +5744,29 @@ async function initFirebase(){
     else { fbApp = firebase.apps[0]; }
     fbDb = firebase.database();
     fbReady = true;
-    attachUsersListener(); // ← sync users across all devices
+    attachUsersListener();
+
+    // ── Monitor connection state — update sync button live ──
+    fbDb.ref('.info/connected').on('value', snap => {
+      const connected = snap.val() === true;
+      if(connected){
+        updateSyncBtnIdle();
+        updateStorageMonitor();
+        // Re-attach branch listeners if logged in
+        const bid = activeBranchId();
+        if(bid && bid !== 'admin' && !_stockListener) attachBranchListeners(bid);
+      } else {
+        const btn = document.getElementById('syncBtn');
+        const lbl = document.getElementById('syncBtnLabel');
+        if(btn){ btn.className='sync-btn sync-fail'; }
+        if(lbl){ lbl.textContent='OFFLINE'; }
+        const el = document.getElementById('storageMon');
+        if(el){ el.innerHTML=`<span style="font-size:9px">⚡</span><span style="font-family:var(--mono);font-size:8px;color:var(--amber)">RECONNECTING</span>`; }
+      }
+    });
+
     updateSyncBtnIdle();
+    updateStorageMonitor();
     return true;
   } catch(e){
     console.warn('Firebase init failed:', e);
@@ -5460,182 +5788,66 @@ function setSyncState(state, msg){
 }
 
 function updateSyncBtnIdle(){
-  const bid = activeBranchId();
   const btn = document.getElementById('syncBtn');
   const lbl = document.getElementById('syncBtnLabel');
   if(!btn) return;
-  const unsyncedCount = getUnsyncedCount(bid);
   if(!fbReady){
     btn.className='sync-btn sync-fail';
     lbl.textContent='OFFLINE';
     btn.title='Firebase not connected — tap to retry';
-  } else if(unsyncedCount > 0){
-    btn.className='sync-btn';
-    lbl.textContent=`SYNC (${unsyncedCount})`;
-    btn.title=`${unsyncedCount} unsynced transaction${unsyncedCount>1?'s':''}`;
   } else {
     btn.className='sync-btn sync-ok';
-    lbl.textContent='SYNCED ✓';
-    btn.title='All data synced to cloud';
+    lbl.textContent='LIVE ✓';
+    btn.title='Real-time sync active — all data is live';
   }
 }
 
-function getUnsyncedCount(branchId){
-  if(!branchId||branchId==='admin') return 0;
-  const d = JSON.parse(localStorage.getItem(branchStorageKey(branchId))||'{}');
-  const localLogs = d.l || [];
-  return localLogs.filter(t=>!t.synced && t.syncId).length;
-}
+// getUnsyncedCount — always 0 in Firebase-first mode (writes are immediate)
+function getUnsyncedCount(){ return 0; }
 
-// ── Main sync trigger ──
+// triggerSync — reconnect Firebase and re-attach listeners if needed
 async function triggerSync(){
-  if(!fbReady){ setSyncState('syncing'); await initFirebase(); }
-  if(!fbReady){ setSyncState('fail','OFFLINE'); return; }
+  if(!fbReady){ setSyncState('syncing'); const ok = await initFirebase(); if(!ok){ setSyncState('fail','OFFLINE'); return; } }
   const bid = activeBranchId();
-  if(!bid || bid==='admin'){
-    // Admin: pull all branches
-    await adminPullAll();
-    return;
-  }
   setSyncState('syncing');
-  if(!fbReady){ const ok = await initFirebase(); if(!ok){ setSyncState('fail','NO CLOUD'); return; } }
   try {
-    await pushUnsyncedTx(bid);
-    await pullBranchStock(bid);
-    setSyncState('ok','DONE ✓');
-    updateSyncBtnIdle();
+    if(bid && bid!=='admin'){
+      // Re-attach listener (forces fresh read from Firebase)
+      attachBranchListeners(bid);
+    } else {
+      await pullAllBranchStats();
+      _renderAdmOverviewUI();
+    }
+    setSyncState('ok','LIVE ✓');
   } catch(e){
-    console.error('Sync error:', e);
     setSyncState('fail','FAILED');
   }
 }
 
-// ── Push unsynced transactions to Firebase ──
-async function pushUnsyncedTx(branchId){
-  const storageKey = branchStorageKey(branchId);
-  const d = JSON.parse(localStorage.getItem(storageKey)||'{}');
-  const localLogs = d.l || [];
-  const unsynced = localLogs.filter(t => !t.synced && t.syncId);
-  if(!unsynced.length) return;
-
-  const txRef = fbDb.ref(`branches/${branchId}/transactions`);
-  const updates = {};
-
-  for(const tx of unsynced){
-    // Safe key: replace chars Firebase dislikes
-    const safeId = tx.syncId.replace(/[.#$[\]]/g,'_');
-    // Write transaction record — Firebase ignores if key already exists
-    // (we use set with priority via update; existing keys are NOT overwritten)
-    updates[safeId] = {
-      iso:   tx.iso,
-      f:     tx.f,        // IN / OUT / RETURN
-      l:     tx.l,        // lens key
-      q:     tx.q,        // quantity
-      r:     tx.r||'',    // reason
-      tp:    tx.tp||'',
-      ct:    tx.ct||'',
-      ey:    tx.ey||'—',
-      user:  tx.user||'',
-      branch:branchId,
-      d:     tx.d,
-      t:     tx.t
-    };
-  }
-
-  // Batch all new transactions in one single update() call — syncIds are
-  // unique UUIDs so there are no key collisions; no need for per-key transactions.
-  await txRef.update(updates);
-
-  // Update stock delta in Firebase (additive, not replace)
-  await pushStockDeltas(branchId, unsynced);
-
-  // Mark all as synced in localStorage
-  localLogs.forEach(t => {
-    if(!t.synced && t.syncId && updates[t.syncId.replace(/[.#$[\]]/g,'_')]) t.synced = true;
-  });
-  d.l = localLogs;
-  localStorage.setItem(storageKey, JSON.stringify(d));
-  // Reload logs into memory
-  logs = localLogs;
+// pullBranchStock — kept for compatibility; real-time listener handles this now
+async function pullBranchStock(branchId){
+  if(!fbReady || !branchId || branchId==='admin') return;
+  // Just re-attach — listener will fire with latest data
+  if(branchId === activeBranchId()) attachBranchListeners(branchId);
 }
 
-// ── Push stock deltas (additive) ──
-async function pushStockDeltas(branchId, txList){
-  const stockRef = fbDb.ref(`branches/${branchId}/stock`);
-
-  // 1. Aggregate all deltas locally first
-  const deltas = {};
-  for(const tx of txList){
-    const eKey = encodeKey(tx.l);
-    const delta = tx.f==='IN' ? tx.q : -tx.q;
-    deltas[eKey] = (deltas[eKey] || 0) + delta;
+// adminPullAll — refresh all branch caches
+async function adminPullAll(){
+  setSyncState('syncing','PULLING…');
+  if(!fbReady){ const ok=await initFirebase(); if(!ok){ setSyncState('fail','NO CLOUD'); return; } }
+  try {
+    await pullAllBranchStats();
+    setSyncState('ok','ALL LIVE');
+    if(typeof renderAdmLiveView==='function') renderAdmLiveView();
+    _renderAdmOverviewUI();
+  } catch(e){
+    setSyncState('fail','FAILED');
   }
-
-  // 2. One read to get current cloud stock
-  const snap = await stockRef.get();
-  const current = snap.val() || {};
-
-  // 3. Compute new values and write everything in one batch update
-  const updates = {};
-  for(const [k, delta] of Object.entries(deltas)){
-    updates[k] = Math.max(0, (current[k] || 0) + delta);
-  }
-  await stockRef.update(updates);
-
-  // Update last active
-  await fbDb.ref(`branches/${branchId}/meta`).update({
-    lastActive: new Date().toISOString(),
-    lastUser: currentUserName()
-  });
 }
 
 // Firebase key encoding (replace forbidden chars)
 function encodeKey(k){ return k.replace(/\./g,'__DOT__').replace(/#/g,'__HASH__').replace(/\$/g,'__DLR__').replace(/\[/g,'__LB__').replace(/\]/g,'__RB__').replace(/\//g,'__SL__'); }
 function decodeKey(k){ return k.replace(/__DOT__/g,'.').replace(/__HASH__/g,'#').replace(/__DLR__/g,'$').replace(/__LB__/g,'[').replace(/__RB__/g,']').replace(/__SL__/g,'/'); }
-
-// ── Pull latest branch stock from Firebase ──
-async function pullBranchStock(branchId){
-  const snap = await fbDb.ref(`branches/${branchId}/stock`).get();
-  if(!snap.exists()) return;
-  const cloudStock = snap.val();
-  const storageKey = branchStorageKey(branchId);
-  const d = JSON.parse(localStorage.getItem(storageKey)||'{}');
-  const localInv = d.i ? new Map(d.i) : new Map();
-
-  // Merge: cloud is source of truth for stock levels
-  for(const [encodedKey, qty] of Object.entries(cloudStock)){
-    const realKey = decodeKey(encodedKey);
-    localInv.set(realKey, qty);
-  }
-  d.i = [...localInv];
-  localStorage.setItem(storageKey, JSON.stringify(d));
-
-  // Update in-memory if this is the active branch
-  if(activeBranchId()===branchId){
-    inv = localInv;
-    renderStats();
-    // Only re-render matrix if the matrix screen is currently visible
-    const matrixScreen = document.getElementById('matrix');
-    if(matrixScreen && matrixScreen.classList.contains('active')){
-      if(typeof renderMatrix==='function') renderMatrix();
-    }
-  }
-}
-
-// ── Admin: pull all branches ──
-async function adminPullAll(){
-  setSyncState('syncing','PULLING…');
-  if(!fbReady){ const ok = await initFirebase(); if(!ok){ setSyncState('fail','NO CLOUD'); return; } }
-  try {
-    const branches = getBranchConfig();
-    await Promise.all(branches.map(b => pullBranchStock(b.id)));
-    setSyncState('ok','ALL PULLED');
-    if(typeof renderAdmLiveView==='function') renderAdmLiveView();
-  } catch(e){
-    setSyncState('fail','FAILED');
-    console.error('Admin pull error:', e);
-  }
-}
 
 // ── Firebase config modal ──
 function openFbModal(){
@@ -5709,31 +5921,29 @@ function applyTheme(theme){
   if(btn) btn.textContent = isLight ? '🌑' : '🌙';
 }
 
-// ── loadFromCloud: pull latest stock for current branch from Firebase ──
+// ── loadFromCloud: re-attach real-time listener (forces fresh Firebase read) ──
 window.loadFromCloud = async function(){
   const bid = activeBranchId();
   if(!bid || bid==='admin') return;
   if(!fbReady) await initFirebase();
-  if(!fbReady) return;
-  await pullBranchStock(bid);
-  renderStats();
-  if(typeof renderMatrix==='function') renderMatrix();
+  if(!fbReady){ show('⚠ Offline — cannot load','var(--red)'); return; }
+  attachBranchListeners(bid);
   updateSyncBtnIdle();
 };
 
-// ── syncToCloud: alias for the big SYNC CLOUD button ──
+// ── syncToCloud: in Firebase-first mode this just re-attaches listeners ──
 window.syncToCloud = async function(){
   const btn = document.querySelector('[onclick="syncToCloud()"]');
-  if(btn){ btn.disabled=true; btn.innerHTML='<span style="font-size:22px">⏳</span> SYNCING…'; }
-  await triggerSync();
+  if(btn){ btn.disabled=true; btn.innerHTML='<span style="font-size:22px">⏳</span> CONNECTING…'; }
+  if(!fbReady) await initFirebase();
+  const bid = activeBranchId();
+  if(bid && bid!=='admin') attachBranchListeners(bid);
+  else await pullAllBranchStats();
   if(btn){
-    const ok = fbReady;
-    btn.innerHTML = ok ? '<span style="font-size:22px">✅</span> SYNCED!' : '<span style="font-size:22px">❌</span> FAILED';
-    setTimeout(()=>{
-      btn.disabled=false;
-      btn.innerHTML='<span style="font-size:22px">🔄</span> SYNC CLOUD';
-    }, 2500);
+    btn.innerHTML = fbReady ? '<span style="font-size:22px">✅</span> LIVE!' : '<span style="font-size:22px">❌</span> FAILED';
+    setTimeout(()=>{ btn.disabled=false; btn.innerHTML='<span style="font-size:22px">🔄</span> SYNC CLOUD'; }, 2500);
   }
+  updateSyncBtnIdle();
 };
 
 window.toggleTheme = function(){
@@ -5752,207 +5962,74 @@ initTheme();
 updateStorageMonitor();
 
 // ══════════════════════════════════════════════════════════════
-// DEEP CLEAN v4 — runs once per device
-// Fixes three problems:
-//   1. Phantom White HMC Single Vision qty=1 seeds (extreme SPH range)
-//   2. Positive CYL keys (e.g. +1.75 instead of -1.75) — merge into correct key then delete
-//   3. Old presbyopic seed data (v1/v2/v3 flags)
-// After cleaning localStorage, pushes corrected stock to Firebase
-// so ALL devices converge to the same truth on next sync.
+// DEEP CLEAN v5 — Firebase-first
+// Runs once. Reads Firebase stock directly, removes phantom keys,
+// fixes positive CYL keys, then writes back to Firebase.
+// All devices get clean data automatically via their real-time listeners.
 // ══════════════════════════════════════════════════════════════
-(function deepCleanV4(){
-  const CLEAN_FLAG = 'spec_deep_clean_v4';
-  if(localStorage.getItem(CLEAN_FLAG)) return; // already done on this device
+(function scheduleDeepCleanV5(){
+  const CLEAN_FLAG = 'spec_deep_clean_v5';
+  if(localStorage.getItem(CLEAN_FLAG)) return;
 
-  const BRANCHES_ALL = ['twese','nyubwa','mengo','mbarara'];
-  const fs = v => v===0?'0.00':((v>0?'+':'')+v.toFixed(2));
-  const fa = v => '+'+v.toFixed(2);
-
-  let totalDeleted = 0, totalMerged = 0, totalCylFixed = 0;
-
-  BRANCHES_ALL.forEach(branch => {
-    const BK = 'spec_lens_' + branch + '_v1';
-    const data = JSON.parse(localStorage.getItem(BK)||'{"i":[],"l":[]}');
-    const inv = new Map(data.i||[]);
-
-    // ── FIX 1: Remove phantom White HMC SV qty=1 seeds ──
-    // These were seeded across the full SPH matrix (-20 to +20) with qty=1.
-    // Real stock has qty > 1 except for genuinely low items, but the pattern
-    // of EVERY extreme SPH having exactly 1 is a clear seed fingerprint.
-    // Safe rule: delete White HMC Single keys where qty===1 AND |SPH| > 8.00
-    inv.forEach((qty, key) => {
-      const parts = key.split('|');
-      if(parts[0]==='Single' && parts[1]==='white_hmc' && qty===1){
-        const sph = parseFloat(parts[2]);
-        if(!isNaN(sph) && Math.abs(sph) > 8.00){
-          inv.delete(key);
-          totalDeleted++;
-        }
-      }
-    });
-
-    // ── FIX 2: Positive CYL keys → merge qty into correct negative key ──
-    // e.g. Single|sss_mar|-2.50|+1.75 should be Single|sss_mar|-2.50|-1.75
-    const keysToFix = [];
-    inv.forEach((qty, key) => {
-      const parts = key.split('|');
-      // Single Vision key format: Type|coat|sph|cyl
-      if(parts[0]==='Single' && parts.length===4){
-        const cyl = parseFloat(parts[3]);
-        if(!isNaN(cyl) && cyl > 0){
-          keysToFix.push({key, qty, parts});
-        }
-      }
-      // Presbyopic key format: Type|coat|eye|sph|add — CYL not applicable, skip
-    });
-    keysToFix.forEach(({key, qty, parts}) => {
-      const correctCyl = fs(-Math.abs(parseFloat(parts[3])));
-      const correctKey = parts[0]+'|'+parts[1]+'|'+parts[2]+'|'+correctCyl;
-      // Merge: add qty to correct key
-      inv.set(correctKey, (inv.get(correctKey)||0) + qty);
-      inv.delete(key);
-      totalCylFixed++;
-    });
-
-    // ── FIX 3: Old presbyopic seed data (v1/v2/v3) ──
-    const hadOldFlags = ['spec_seed_allbranches_v1','spec_seed_allbranches_v2','spec_seed_allbranches_v3']
-      .some(f => localStorage.getItem(f));
-    if(hadOldFlags){
-      const COATINGS_ALL = ['cr39_clear','white_hmc','sss_mar','white_bluecut','bluecut_sss'];
-      const PRESB_TYPES = ['Bifocal','Progressive'];
-      const PRESB_SPH=[], ADD_VALS=[];
-      for(let s=4.00;s>=-4.01;s-=0.25) PRESB_SPH.push(parseFloat(s.toFixed(2)));
-      for(let a=1.00;a<=3.51;a+=0.25) ADD_VALS.push(parseFloat(a.toFixed(2)));
-      COATINGS_ALL.forEach(coat=>{
-        PRESB_TYPES.forEach(pt=>{
-          PRESB_SPH.forEach(sph=>{
-            ADD_VALS.forEach(add=>{
-              ['RE','LE','PAIR'].forEach(eye=>{
-                const k=pt+'|'+coat+'|'+eye+'|'+fs(sph)+'|'+fa(add);
-                if(inv.get(k)===1){ inv.delete(k); totalDeleted++; }
-              });
-            });
-          });
-        });
-      });
-    }
-
-    data.i = [...inv];
-    localStorage.setItem(BK, JSON.stringify(data));
-  });
-
-  // Clear old seed flags
-  ['spec_seed_allbranches_v1','spec_seed_allbranches_v2','spec_seed_allbranches_v3']
-    .forEach(f => localStorage.removeItem(f));
-
-  localStorage.setItem(CLEAN_FLAG, '1');
-  console.log(`🧹 Deep Clean v4 complete — deleted ${totalDeleted} phantom keys, fixed ${totalCylFixed} positive-CYL keys, merged ${totalMerged} duplicates`);
-
-  // ── Push cleaned stock to Firebase so all devices sync ──
-  // Runs after Firebase is ready (boot sequence calls initFirebase early)
   setTimeout(async () => {
     try {
       if(!fbReady){ await initFirebase(); }
-      if(!fbReady){ console.warn('Deep clean: Firebase not ready, skipping cloud push'); return; }
-      const branches = getBranchConfig ? getBranchConfig() : BRANCHES_ALL.map(id=>({id}));
+      if(!fbReady){ console.warn('Deep Clean v5: Firebase not ready'); return; }
+
+      const cfg = typeof getBranchConfig==='function' ? getBranchConfig() : [];
+      const branches = cfg.filter(b=>b.id!=='admin');
+      const fs = v => v===0?'0.00':((v>0?'+':'')+v.toFixed(2));
+
       for(const b of branches){
-        if(b.id==='admin') continue;
-        const BK = 'spec_lens_' + b.id + '_v1';
-        const data = JSON.parse(localStorage.getItem(BK)||'{"i":[],"l":[]}');
-        const inv = new Map(data.i||[]);
-        if(inv.size === 0) continue;
-        // Build full stock object and push to Firebase (replaces cloud stock for this branch)
-        const stockObj = {};
-        inv.forEach((qty, key) => {
-          if(qty > 0) stockObj[encodeKey(key)] = qty;
-        });
-        await fbDb.ref(`branches/${b.id}/stock`).set(stockObj);
+        const snap = await fbDb.ref(`branches/${b.id}/stock`).get();
+        if(!snap.exists()) continue;
+        const cloudStock = snap.val();
+        const cleaned = {};
+        let deletedCount=0, fixedCount=0;
+
+        for(const [encodedKey, qty] of Object.entries(cloudStock)){
+          if(!qty || qty <= 0){ deletedCount++; continue; } // remove zeros
+          const key = decodeKey(encodedKey);
+          const parts = key.split('|');
+
+          // ── Fix positive CYL on Single Vision keys ──
+          if(parts[0]==='Single' && parts.length===4){
+            const cylVal = parseFloat(parts[3]);
+            if(!isNaN(cylVal) && cylVal > 0){
+              const fixedKey = parts[0]+'|'+parts[1]+'|'+parts[2]+'|'+fs(-Math.abs(cylVal));
+              const fixedEncoded = encodeKey(fixedKey);
+              cleaned[fixedEncoded] = (cleaned[fixedEncoded]||0) + qty;
+              fixedCount++;
+              continue;
+            }
+          }
+
+          // ── Remove phantom White HMC seeds (qty=1 at extreme SPH) ──
+          if(parts[0]==='Single' && parts[1]==='white_hmc' && qty===1){
+            const sph = parseFloat(parts[2]);
+            if(!isNaN(sph) && Math.abs(sph) > 8.00){ deletedCount++; continue; }
+          }
+
+          cleaned[encodedKey] = qty;
+        }
+
+        // Write cleaned stock back to Firebase
+        await fbDb.ref(`branches/${b.id}/stock`).set(cleaned);
         await fbDb.ref(`branches/${b.id}/meta`).update({
           lastClean: new Date().toISOString(),
-          cleanedBy: 'deepCleanV4'
+          cleanVersion: 'v5'
         });
-        console.log(`☁ Pushed clean stock for ${b.id} — ${inv.size} keys`);
+        console.log(`🧹 Deep Clean v5 [${b.id}]: removed ${deletedCount} phantom, fixed ${fixedCount} +CYL keys`);
       }
-      console.log('✅ Deep Clean v4 cloud push complete — all devices will get clean data on next sync');
+
+      localStorage.setItem(CLEAN_FLAG, '1');
+      // Mark older flags done too so they don't run
+      ['spec_deep_clean_v4','spec_cylfix_v1'].forEach(f=>localStorage.setItem(f,'1'));
+      console.log('✅ Deep Clean v5 complete — Firebase stock is now clean on all branches');
     } catch(e){
-      console.error('Deep clean cloud push error:', e);
+      console.error('Deep Clean v5 error:', e);
     }
-  }, 4000); // wait 4s for Firebase + app to fully boot
-})();
-
-// ══════════════════════════════════════════════
-// STOCK SEED — Main Branch (Twese) White HMC
-// Runs once on first load; skips if already seeded
-// ══════════════════════════════════════════════
-(function seedWhiteHMC(){
-  const SEED_FLAG = 'spec_seed_twese_whmc_v1';
-  if(localStorage.getItem(SEED_FLAG)) return; // already done
-  const BRANCH_KEY = 'spec_lens_twese_v1';
-  const entries = [["Single|white_hmc|-5.50|-0.50",4],["Single|white_hmc|-5.75|-0.50",2],["Single|white_hmc|-6.00|-0.50",3],["Single|white_hmc|-6.25|-0.50",2],["Single|white_hmc|-6.50|-0.50",2],["Single|white_hmc|-6.75|-0.50",2],["Single|white_hmc|-6.50|-1.00",2],["Single|white_hmc|-6.75|-1.00",2],["Single|white_hmc|-7.00|-1.00",2],["Single|white_hmc|-7.25|-1.00",2],["Single|white_hmc|-7.50|-1.00",2],["Single|white_hmc|-7.75|-1.00",1],["Single|white_hmc|-2.00|-2.00",2],["Single|white_hmc|-2.25|-2.00",2],["Single|white_hmc|-2.50|-2.00",2],["Single|white_hmc|-2.75|-2.00",2],["Single|white_hmc|-3.00|-2.00",2],["Single|white_hmc|-3.25|-2.00",3],["Single|white_hmc|-3.50|-2.00",2],["Single|white_hmc|-3.75|-2.00",2],["Single|white_hmc|0.00|-5.00",3],["Single|white_hmc|-0.25|-5.00",3],["Single|white_hmc|-0.50|-5.00",3],["Single|white_hmc|-0.75|-5.00",3],["Single|white_hmc|-1.00|-5.00",3],["Single|white_hmc|0.00|-5.25",2],["Single|white_hmc|-0.25|-5.25",1],["Single|white_hmc|-0.50|-5.25",1],["Single|white_hmc|-0.75|-5.25",1],["Single|white_hmc|-1.00|-5.25",1],["Single|white_hmc|-1.25|-5.25",1],["Single|white_hmc|-1.50|-5.25",1],["Single|white_hmc|-1.75|-5.25",1]];
-  const now = new Date();
-  const d = now.toLocaleDateString('en-GB',{day:'2-digit',month:'short'});
-  const t = now.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
-  const iso = now.toISOString();
-  const existing = JSON.parse(localStorage.getItem(BRANCH_KEY)||'{"i":[],"l":[]}');
-  const invMap = new Map(existing.i||[]);
-  const newLogs = entries.map(([k,qty])=>{
-    invMap.set(k,(invMap.get(k)||0)+qty);
-    return {d,t,iso,f:'IN',l:k,q:qty,r:'Stock Load — White HMC',tp:'Single',ct:'White HMC',ey:'—',user:'Admin',syncId:'seed_whmc_'+k,synced:false};
-  });
-  localStorage.setItem(BRANCH_KEY, JSON.stringify({i:[...invMap],l:[...newLogs,...(existing.l||[])]}));
-  localStorage.setItem(SEED_FLAG,'1');
-  console.log('✅ White HMC stock seeded for Twese: 33 SKUs, 67 units');
-})();
-
-
-// ══════════════════════════════════════════════
-// ONE-TIME CLEANUP: Merge positive-CYL keys into negative-CYL keys
-// Runs once per device. Positive CYL (e.g. +1.75) is invalid — stock
-// is merged into the correct negative key then the bad key is deleted.
-// ══════════════════════════════════════════════
-(function fixPosCylKeys(){
-  const FLAG = 'spec_cylfix_v1';
-  if(localStorage.getItem(FLAG)) return;
-  const BRANCHES = ['twese','nyubwa','mengo','mbarara'];
-  let totalMerged = 0, totalDeleted = 0;
-  BRANCHES.forEach(branch => {
-    const BK = 'spec_lens_' + branch + '_v1';
-    const data = JSON.parse(localStorage.getItem(BK) || '{"i":[],"l":[]}');
-    const invMap = new Map(data.i || []);
-    const toDelete = [];
-    invMap.forEach((qty, key) => {
-      const parts = key.split('|');
-      // Single Vision key: Type|coat|SPH|CYL  (4 parts, no eye)
-      if(parts.length === 4 && parts[0] !== 'Bifocal' && parts[0] !== 'Progressive'){
-        const cylStr = parts[3];
-        const cylVal = parseFloat(cylStr);
-        if(!isNaN(cylVal) && cylVal > 0){
-          // Build the correct negative-CYL key
-          const negCyl = -cylVal;
-          const negStr = negCyl === 0 ? '0.00' : negCyl.toFixed(2); // e.g. -1.75
-          const correctKey = parts[0]+'|'+parts[1]+'|'+parts[2]+'|'+negStr;
-          // Merge qty into correct key
-          const existing = invMap.get(correctKey) || 0;
-          invMap.set(correctKey, existing + qty);
-          toDelete.push(key);
-          totalMerged += qty;
-          totalDeleted++;
-          console.log(`🔧 CYL fix [${branch}]: merged ${qty} pcs from "${key}" → "${correctKey}"`);
-        }
-      }
-    });
-    toDelete.forEach(k => invMap.delete(k));
-    if(toDelete.length > 0){
-      data.i = [...invMap];
-      localStorage.setItem(BK, JSON.stringify(data));
-    }
-  });
-  localStorage.setItem(FLAG, '1');
-  if(totalDeleted > 0){
-    console.log(`✅ CYL fix complete: merged ${totalMerged} units across ${totalDeleted} bad keys`);
-  } else {
-    console.log('✅ CYL fix: no positive-CYL keys found');
-  }
+  }, 5000); // wait 5s for Firebase + login to settle
 })();
 
 bootApp();
