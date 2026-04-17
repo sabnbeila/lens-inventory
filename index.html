@@ -1579,6 +1579,7 @@ window.onLoginBranchChange = async () => {
 
 // ── LOGIN ──
 window.doLogin = () => {
+  try {
   const branch = document.getElementById('loginBranch').value;
   const pw     = document.getElementById('loginPw').value.trim();
   const errEl  = document.getElementById('loginErr');
@@ -1647,6 +1648,9 @@ window.doLogin = () => {
   localStorage.setItem(SESSION_KEY, JSON.stringify({branchId:branch,userId:null,userName:''}));
   document.getElementById('loginScreen').style.display='none';
   onBranchLogin(branch);
+  } catch(e){
+    alert('Login error: ' + e.message + '\n\nStack: ' + (e.stack||'').slice(0,200));
+  }
 };
 
 // ── EMERGENCY PASSWORD RESET ──
@@ -1680,6 +1684,7 @@ window.doLogout = () => {
 
 // ── CALLED AFTER LOGIN ──
 function onBranchLogin(branchId){
+  try {
   const b = branchInfo(branchId);
   // Update topbar
   const userSuffix = currentUser ? ` · ${currentUser.name.toUpperCase()}` : '';
@@ -1699,6 +1704,9 @@ function onBranchLogin(branchId){
   // Admin: pre-load all branch caches for overview stats
   if(branchId === 'admin'){
     adminPullAll().catch(e => console.warn('Admin cloud pull failed:', e));
+  }
+  } catch(e){
+    alert('onBranchLogin error: ' + e.message + '\n' + (e.stack||'').slice(0,300));
   }
 }
 
@@ -5740,28 +5748,28 @@ function storeFbConfig(cfg){ localStorage.setItem(FB_CFG_KEY, JSON.stringify(cfg
 // ── Init Firebase (SDKs already loaded in <head>) ──
 async function initFirebase(){
   try {
+    if(!firebase || !firebase.app) return false; // SDK not loaded
     if(!firebase.apps.length){ fbApp = firebase.initializeApp(FB_HARDCODED_CONFIG); }
     else { fbApp = firebase.apps[0]; }
     fbDb = firebase.database();
     fbReady = true;
     attachUsersListener();
 
-    // ── Monitor connection state — update sync button live ──
+    // ── Monitor connection state ──
     fbDb.ref('.info/connected').on('value', snap => {
       const connected = snap.val() === true;
       if(connected){
         updateSyncBtnIdle();
         updateStorageMonitor();
-        // Re-attach branch listeners if logged in
         const bid = activeBranchId();
         if(bid && bid !== 'admin' && !_stockListener) attachBranchListeners(bid);
       } else {
         const btn = document.getElementById('syncBtn');
         const lbl = document.getElementById('syncBtnLabel');
-        if(btn){ btn.className='sync-btn sync-fail'; }
-        if(lbl){ lbl.textContent='OFFLINE'; }
+        if(btn) btn.className='sync-btn sync-fail';
+        if(lbl) lbl.textContent='OFFLINE';
         const el = document.getElementById('storageMon');
-        if(el){ el.innerHTML=`<span style="font-size:9px">⚡</span><span style="font-family:var(--mono);font-size:8px;color:var(--amber)">RECONNECTING</span>`; }
+        if(el) el.innerHTML=`<span style="font-size:9px">⚡</span><span style="font-family:var(--mono);font-size:8px;color:var(--amber)">RECONNECTING</span>`;
       }
     });
 
@@ -5771,6 +5779,7 @@ async function initFirebase(){
   } catch(e){
     console.warn('Firebase init failed:', e);
     fbReady = false;
+    updateSyncBtnIdle();
     return false;
   }
 }
